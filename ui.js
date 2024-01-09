@@ -1,0 +1,237 @@
+import { SelectionArea } from "./SelectionArea.js";
+
+const htmlByType = {
+	"integer": (fieldDesc) =>
+	{
+		return(
+		`<div class="ui-input">
+			<label><div class="caption">${fieldDesc.label}:</div>
+				<input
+					type="number"
+					name="${fieldDesc.name}"
+					value="${fieldDesc.value}"
+					step="1"
+					min="${fieldDesc.min || 0}"
+					max="${fieldDesc.max || 10}"/>
+			</label>
+		</div>`
+		);
+	},
+
+	"float": (fieldDesc) =>
+	{
+		return(
+		`<div class="ui-input">
+			<label><div class="caption">${fieldDesc.label}:</div>
+				<input
+					type="number"
+					name="${fieldDesc.name}"
+					value="${fieldDesc.value}"
+					step="0.01"
+					min="${fieldDesc.min || 0}"
+					max="${fieldDesc.max || 1}"/>
+			</label>
+		</div>`
+		);
+	},
+
+	"floatArray": (fieldDesc) =>
+	{
+		let fieldsHTML = "";
+
+		for (let i = 0; i < fieldDesc.value.length; i++)
+		{
+			fieldsHTML +=
+			`<input
+				type="number"
+				name="${fieldDesc.name}"
+				value="${fieldDesc.value[i]}"
+				step="0.01"
+				min="${fieldDesc.min || 0}"
+				max="${fieldDesc.max || 1}"/>`
+		}
+
+		return(
+		`<div class="ui-input">
+			<label><div class="caption">${fieldDesc.label}:</div>
+				${fieldsHTML}
+			</label>
+		</div>`
+		);
+	},
+
+	"boolean": (fieldDesc) =>
+	{
+		return(
+			`<div class="ui-input">
+				<label><div class="caption">${fieldDesc.label}:</div>
+					<input type="checkbox" name="${fieldDesc.name}" ${fieldDesc.value ? "checked" : ""} />
+				</label>
+			</div>`
+		);
+	}
+};
+
+export class UI
+{
+	constructor(cfg)
+	{
+		this._cfg = cfg;
+		this._uiBodyDOM = undefined;
+		this._handlers = {};
+		this.drawing = false;
+		this.selectionArea = new SelectionArea({
+			gridRows: this._cfg.gridRows,
+			gridCols: this._cfg.gridCols,
+			snapToGrid: true
+		});
+	}
+
+	init()
+	{
+		// this.selectionArea.init();
+		// this._addEventListeners();
+	}
+
+	setFields(fields)
+	{
+		this._cfg.fields = fields;
+		const html = this._buildUIHTML(fields);
+		document.body.insertAdjacentHTML("beforeend", html);
+		this._uiBodyDOM = document.querySelector(".ui-body");
+		this._addEventListeners();
+	}
+
+	registerHandler(e, handler)
+	{
+		if (typeof handler !== "function")
+		{
+			console.error("Passed handler isn't a function!");
+			return;
+		}
+
+		if (this._handlers[e] === undefined)
+		{
+			this._handlers[e] = [];
+		}
+
+		this._handlers[e].push(handler);
+	}
+
+	_buildUIHTML(fields)
+	{
+		let fieldsHTML = "";
+
+		for (let i = 0; i < fields.length; i++)
+		{
+			const fieldDesc = fields[i];
+
+			if (htmlByType[fieldDesc.type])
+			{
+				fieldsHTML += htmlByType[fieldDesc.type](fieldDesc);
+			}
+			else
+			{
+				console.warn("No html generator for type", fieldDesc.type);
+			}
+		}
+
+		let html =
+		`<div class="ui-container">
+			<div class="ui-body">${fieldsHTML}</div>
+		</div>`;
+
+		return html;
+	}
+
+	_runEventHandlers(e, data)
+	{
+		if (this._handlers[e] instanceof Array)
+		{
+			for (let i = 0; i < this._handlers[e].length; i++)
+			{
+				this._handlers[e][i](data);
+			}
+		}
+	}
+
+	_onPointermove(e)
+	{
+		this._runEventHandlers("pointermove", e);
+	}
+
+	_onPointerdown(e)
+	{
+		this.drawing = true;
+		this._runEventHandlers("pointerdown", e);
+	}
+
+	_onPointerup(e)
+	{
+		this.drawing = false;
+		this._runEventHandlers("pointerup", e);
+	}
+
+	_onKeydown(e)
+	{
+		if (e.key === "c" && e.ctrlKey)
+		{
+			console.log("ctrl+c")
+			this._runEventHandlers("ctrl+c", e);
+		}
+
+		if (e.key === "v" && e.ctrlKey)
+		{
+			console.log("ctrl+v");
+			this._runEventHandlers("ctrl+v", e);
+		}
+
+		if (e.key === "x" && e.ctrlKey)
+		{
+			this._runEventHandlers("ctrl+x", e);
+		}
+	}
+
+	_onMousemove(e)
+	{
+		const bcr = e.currentTarget.getBoundingClientRect();
+		const x = ((e.clientX - bcr.x) / bcr.width) * 2. - 1.;
+		const y = ((e.clientY - bcr.y) / bcr.height) * 2. - 1.;
+		e.currentTarget.style.transform = `perspective(1000px) rotateX(${y * 5}deg) rotateY(${-x * 5}deg)`;
+	}
+
+	_onMouseleave(e)
+	{
+		e.currentTarget.style.transform = `perspective(1000px) rotateX(0deg) rotateY(0deg)`;
+	}
+
+	_addInputEventListeners()
+	{
+		const inputs = this._uiBodyDOM.querySelectorAll("input");
+
+		for (let i = 0; i < inputs.length; i++)
+		{
+			if (inputs[i].type === "number")
+			{
+				inputs[i].addEventListener("input", this._onInput);
+			}
+		}
+	}
+
+	_addEventListeners()
+	{
+		// window.addEventListener("pointerdown", (e) => { this._onPointerdown(e); });
+		// window.addEventListener("pointermove", (e) => { this._onPointermove(e); });
+		// window.addEventListener("pointerup", (e) => { this._onPointerup(e); });
+		// window.addEventListener("keydown", this._onKeydown.bind(this));
+		this._uiBodyDOM.addEventListener("mousemove", this._onMousemove);
+		this._uiBodyDOM.addEventListener("mouseleave", this._onMouseleave);
+		this._addInputEventListeners();
+	}
+
+	_removeEventListeners()
+	{
+		this._uiBodyDOM.removeEventListener("mousemove", this._onMousemove);
+		this._uiBodyDOM.removeEventListener("mouseleave", this._onMouseleave);
+	}
+}

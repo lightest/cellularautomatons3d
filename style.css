@@ -1,0 +1,73 @@
+* {
+	box-sizing: border-box;
+}
+
+body {
+	margin: 0;
+	background: black;
+}
+
+.selection-area {
+	position: fixed;
+	top: 0;
+	left: 0;
+	border: 1px solid cyan;
+	background: rgba(0, 255, 255, .5);
+}
+
+.ui-container {
+	position: fixed;
+	top: 30px;
+	right: 30px;
+	bottom: 30px;
+}
+
+.ui-body {
+	background: rgba(0, 0, 0, .5);
+	border-radius: 16px;
+	height: 100%;
+	padding: 16px;
+	color: white;
+	font-family: "consolas";
+	box-shadow: 0 0 0px 1px rgb(39 39 39 / 39%), 0 0 0px 2px rgb(73 73 73), inset 0 0 75px 0px rgb(255 255 255 / 18%), 0 0 21px 12px rgb(0 0 0 / 16%);
+	backdrop-filter: blur(35px);
+	transition: transform .3s ease;
+}
+
+.ui-body:hover {
+	transition: none;
+}
+
+.ui-input {
+	margin: 8px 0;
+}
+
+.ui-input label {
+	display: flex;
+	align-items: center;
+}
+
+.ui-input label .caption {
+	margin-right: 8px;
+}
+
+.ui-input input {
+	padding: 8px;
+	font-family: "consolas";
+	margin-left: auto;
+}
+
+.ui-input input[type="number"]
+{
+	color: white;
+	font-size: 16px;
+	border: none;
+	background: rgb(45 45 45 / 46%);
+	border-radius: 8px;
+	box-shadow: inset 0 1px 2px rgb(0 0 0 / 35%), 0 1px 1px rgb(67 67 67);
+}
+
+.ui-input input[type="checkbox"]
+{
+
+}
