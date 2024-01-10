@@ -181,7 +181,6 @@ class MainModule
 		// this._ui.registerHandler("pointermove", this._onPointermove.bind(this));
 		// this._ui.registerHandler("pointerdown", this._onPointerdown.bind(this));
 		// this._ui.registerHandler("pointerup", this._onPointerup.bind(this));
-		// this._ui.registerHandler("ctrl+c", this._copyHandler.bind(this));
 
 		this._updateLoop();
 	}
@@ -282,14 +281,16 @@ class MainModule
 		const renderTarget0 = this._device.createTexture({
 			size: [this._canvas.width, this._canvas.height],
 			sampleCount: this._sampleCount,
-			format: navigator.gpu.getPreferredCanvasFormat(),
+			// format: navigator.gpu.getPreferredCanvasFormat(),
+			format: "rgba16float",
 			usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING
 		});
 
 		const renderTarget1 = this._device.createTexture({
 			size: [this._canvas.width, this._canvas.height],
 			sampleCount: this._sampleCount,
-			format: navigator.gpu.getPreferredCanvasFormat(),
+			// format: navigator.gpu.getPreferredCanvasFormat(),
+			format: "rgba16float",
 			usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING
 		});
 
@@ -972,8 +973,8 @@ class MainModule
 						format: navigator.gpu.getPreferredCanvasFormat()
 					},
 					{
-						// format: "rgba16float"
-						format: navigator.gpu.getPreferredCanvasFormat()
+						format: "rgba16float"
+						// format: navigator.gpu.getPreferredCanvasFormat()
 					}
 				]
 			},
@@ -1309,29 +1310,6 @@ class MainModule
 		// this._lightSource.y = Math.sin(performance.now() * .0007) * 2;
 		// this._lightSource.x = Math.cos(performance.now() * .0007) * 2;
 		this._lightSource.update();
-	}
-
-	async _copyFromStagingBuffer ()
-	{
-		await this._stagingBuffer.mapAsync(
-			GPUMapMode.READ,
-			0,
-			this._stagingBuffer.size
-		);
-
-		const arrayBuffer = this._stagingBuffer.getMappedRange(0, this._stagingBuffer.size);
-		const result = new Uint32Array(arrayBuffer.slice());
-		this._stagingBuffer.unmap();
-
-		return result;
-	}
-
-	async _copyHandler()
-	{
-		const cellStateData = await this._copyFromStagingBuffer();
-		const selection = this._ui.selectionArea.getSelectionGridCorners();
-		const startIdx = this._getCellIdx(selection.bottomLeft.col, selection.bottomLeft.row);
-		// TODO
 	}
 
 	_renderPass(commandEncoder)
