@@ -128,6 +128,17 @@ fn calculateLigtingAndOcclusionAt(samplePoint: vec3f, vUv: vec2f) -> vec4f
 	let cellCoords = floor((samplePoint + HALF_CUBE_SIZE) / cellSize);
 	let cellOrigin = cellCoords * cellSize + cellSize * 0.5f - HALF_CUBE_SIZE;
 	let i = getCellIdx(cellCoords);
+
+	// Actual visible cell size might be smaller than the volume cell it is occupying.
+	let actualVisibleCubeSize = cellSize * uCellSize * 0.5f;
+	let distToActualCell = sdBox(samplePoint - cellOrigin, vec3f(actualVisibleCubeSize));
+
+	// TODO: other ideas?
+	if (cellStates[i] != 1 || distToActualCell > 0.001f)
+	{
+		return out;
+	}
+
 	let lightDir = normalize(lightSource.pos - samplePoint);
 	let rndOffset = n1rand(vUv);
 
@@ -449,13 +460,11 @@ fn rayMarchDepth(start: vec3f, end: vec3f, vUv: vec2f, steps: f32) -> RayMarchOu
 @fragment
 fn fragment_main(fragData: VertexOut) -> ShaderOut
 {
-	// var out: vec4f = vec4f(fragData.color.xy * fragData.cell, fragData.color.zw);
-	// let c = fragData.cell / uGridSize.xy;
-	// let c = fragData.cell / uGridSize;
-	// var out: vec4f = vec4f(c.xy, 1f - c.x, 1f);
 	var out = vec4f(0.0f, 0.0f, 0.0f, 1.0f);
 	var shaderOut: ShaderOut;
 	var rayMarchOut: RayMarchOut;
+	var mixedColor = vec4f(0, 0, 0, 1);
+	var mixedDepth = vec4f(0);
 
 	let cameraPos = viewMat[3].xyz;
 	// let viewDir = normalize(fragData.worldPosition.xyz - cameraPos);
@@ -481,14 +490,24 @@ fn fragment_main(fragData: VertexOut) -> ShaderOut
 		// rayMarchOut = rayMarch(cubeEnterPoint, cubeExitPoint, fragData.vUv, 25.0f);
 		rayMarchOut = rayMarchDepth(cubeEnterPoint, cubeExitPoint, fragData.vUv, 25.0f);
 		out = rayMarchOut.color;
+		let uv = getReprojectedUV(rayMarchOut.finalSamplePoint);
+		let prevColor = textureLoad(prevFrame, vec2i(uv * uWindowSize), 0);
+		var currentDepth = length(cubeEnterPoint - rayMarchOut.finalSamplePoint);
+		let prevDepth = textureLoad(depthBuffer, vec2i(uv * uWindowSize), 0).xy;
+
+		mixedDepth = mixWithReprojectedDepth(
+			vec2f(currentDepth, 1.0),
+			prevDepth,
+			rayMarchOut.finalSamplePoint,
+			rayMarchOut.farthestMarchPoint,
+			uv
+		);
+
+		out = calculateLigtingAndOcclusionAt(cubeEnterPoint + viewRay * mixedDepth.r, fragData.vUv);
+
+		mixedColor = mixWithReprojectedColor(out, prevColor, rayMarchOut.finalSamplePoint, rayMarchOut.farthestMarchPoint, uv);
+		out = mixedColor;
 		// out = vec4f(1.0f, 0.0f, 0.0f, 1.0f);
-	}
-	else
-	{
-		if (cubeIntersections.y < 0.0f)
-		{
-			// out = vec4f(0.0, 0.0, 1.0, 1.0);
-		}
 	}
 
 	let lightIntersect = rayCubeIntersect(cameraPos, viewRay, lightSource.pos, vec3f(0.005f));
@@ -505,38 +524,7 @@ fn fragment_main(fragData: VertexOut) -> ShaderOut
 	// out = vec4f(uCommonBuffer.data.f1, 1.0f);
 	// out = vec4f(vec3f(uCommonBuffer.data.f0, 0, 0), 1.0f);
 
-	let uv = getReprojectedUV(rayMarchOut.finalSamplePoint);
-	let prevColor = textureLoad(prevFrame, vec2i(uv * uWindowSize), 0);
-	let prevDepth = textureLoad(depthBuffer, vec2i(uv * uWindowSize), 0).xy;
-	let mixedDepth = mixWithReprojectedDepth(
-		vec2f(length(cubeEnterPoint - rayMarchOut.finalSamplePoint), 1.0),
-		prevDepth,
-		rayMarchOut.finalSamplePoint,
-		rayMarchOut.farthestMarchPoint,
-		uv
-	);
 
-	out = calculateLigtingAndOcclusionAt(cubeEnterPoint + viewRay * mixedDepth.r, fragData.vUv);
-
-	// Gamma correction with 2.2f.
-	// out = vec4f(pow(out.xyz, vec3f(1 / 2.2f)), out.w);
-
-	let mixedColor = mixWithReprojectedColor(out, prevColor, rayMarchOut.finalSamplePoint, rayMarchOut.farthestMarchPoint, uv);
-	out = mixedColor;
-
-	// TODO: this is due to sampling inside mixWithReprojectedColor() has to be in uniform control flow.
-	// Better ideas?
-	if (cubeIntersections.x <= cubeIntersections.y && cubeIntersections.y >= 0.0f)
-	{
-		if (mixedDepth.r < length(cubeExitPoint - cubeEnterPoint) - .1)
-		{
-			// out = calculateLigtingAndOcclusionAt(cubeEnterPoint + viewRay * mixedDepth.r, fragData.vUv);
-		}
-		// out = vec4f(out.xyz, 1.0f);
-		// out = vec4f(pow(out.xyz, vec3f(1 / 2.2f)), out.w);
-	}
-
-	// let tex = textureSample(prevFrame, prevFrameSampler, fragData.vUv * 2.0f);
 
 	if (fragData.vUv.x < 0.5f && fragData.vUv.y < 0.5f)
 	{

@@ -1,7 +1,7 @@
 import { UI } from "./ui.js";
 import { vec3, mat4, quat } from "./libs/wgpu-matrix.module.js";
 
-const GRID_SIZE = 256;
+const GRID_SIZE = 32;
 const WORK_GROUP_SIZE = 4;
 const MAX_COMPUTE_STEP_DURATION = 16; // Amount of ms to hold one frame of simulation for.
 const TRANSLATION_SPEED = .15;
