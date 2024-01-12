@@ -1,7 +1,7 @@
 import { UI } from "./ui.js";
 import { vec3, mat4, quat } from "./libs/wgpu-matrix.module.js";
 
-const GRID_SIZE = 32;
+const GRID_SIZE = 256;
 const WORK_GROUP_SIZE = 4;
 const MAX_COMPUTE_STEP_DURATION = 16; // Amount of ms to hold one frame of simulation for.
 const TRANSLATION_SPEED = .15;
@@ -65,9 +65,10 @@ class MainModule
 		this._bindGroups = [];
 		this._bindGroupLayouts = [];
 		this._samplers = {};
-		this._samplerBindGroups = [];
+		this._textureBindGroups = [];
 		this._resolutionDependentAssets = {};
 		this._renderTargetsSwapArray = [];
+		this._depthBuffersSwapArray = [];
 	}
 
 	async init()
@@ -114,7 +115,7 @@ class MainModule
 		const uniformBuffers = this._setupUniformsBuffers();
 		const storageBuffers = this._setupStorageBuffers();
 		this._setupBindGroups();
-		this._setupSamplerResourcesBindGroups();
+		this._setupTextureResourcesBindGroups();
 		await this._setupPipelines();
 		this._setupRenderPassDescriptor();
 		// this._handleResize();
@@ -122,62 +123,62 @@ class MainModule
 		this._addEventListeners();
 
 		this._ui.init();
-		this._ui.setFields([
-			{
-				type: "integer",
-				label: "grid size",
-				name: "gridSize",
-				value: GRID_SIZE,
-				min: 3,
-				max: 256
-			},
-			{
-				type: "integer",
-				label: "volume samples",
-				name: "marchSamples",
-				value: 200,
-				min: 1,
-				max: 500
-			},
-			{
-				type: "integer",
-				label: "shadow ray samples",
-				name: "shadowRaySamples",
-				value: 10,
-				min: 1,
-				max: 256
-			},
-			{
-				type: "floatArray",
-				label: "volume origin",
-				name: "volOrigin",
-				value: new Float32Array([0, 0, 0]),
-				min: -100,
-				max: 100
-			},
-			{
-				type: "float",
-				label: "visible cell size",
-				name: "cellSize",
-				value: .85,
-				min: .01,
-				max: 1
-			},
-			{
-				type: "float",
-				label: "temporal reprojection alpha",
-				name: "temporalAlpha",
-				value: .1,
-				min: 0,
-				max: 1
-			},
-			{
-				type: "boolean",
-				label: "animate light",
-				name: "animateLight",
-				value: true
-			},
-		]);
+		// this._ui.setFields([
+		// 	{
+		// 		type: "integer",
+		// 		label: "grid size",
+		// 		name: "gridSize",
+		// 		value: GRID_SIZE,
+		// 		min: 3,
+		// 		max: 256
+		// 	},
+		// 	{
+		// 		type: "integer",
+		// 		label: "volume samples",
+		// 		name: "marchSamples",
+		// 		value: 200,
+		// 		min: 1,
+		// 		max: 500
+		// 	},
+		// 	{
+		// 		type: "integer",
+		// 		label: "shadow ray samples",
+		// 		name: "shadowRaySamples",
+		// 		value: 10,
+		// 		min: 1,
+		// 		max: 256
+		// 	},
+		// 	{
+		// 		type: "floatArray",
+		// 		label: "volume origin",
+		// 		name: "volOrigin",
+		// 		value: new Float32Array([0, 0, 0]),
+		// 		min: -100,
+		// 		max: 100
+		// 	},
+		// 	{
+		// 		type: "float",
+		// 		label: "visible cell size",
+		// 		name: "cellSize",
+		// 		value: .85,
+		// 		min: .01,
+		// 		max: 1
+		// 	},
+		// 	{
+		// 		type: "float",
+		// 		label: "temporal reprojection alpha",
+		// 		name: "temporalAlpha",
+		// 		value: .1,
+		// 		min: 0,
+		// 		max: 1
+		// 	},
+		// 	{
+		// 		type: "boolean",
+		// 		label: "animate light",
+		// 		name: "animateLight",
+		// 		value: true
+		// 	},
+		// ]);
 		// this._ui.registerHandler("pointermove", this._onPointermove.bind(this));
 		// this._ui.registerHandler("pointerdown", this._onPointerdown.bind(this));
 		// this._ui.registerHandler("pointerup", this._onPointerup.bind(this));
@@ -294,26 +295,28 @@ class MainModule
 			usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING
 		});
 
-		const prevFrameRender = this._device.createTexture({
-			size: [this._canvas.width, this._canvas.height],
-			format: navigator.gpu.getPreferredCanvasFormat(),
-			usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST
-		});
-
-		const depthTexture = this._device.createTexture({
+		const depthBuffer0 = this._device.createTexture({
 			size: [this._canvas.width, this._canvas.height],
 			sampleCount: this._sampleCount,
-			format: "depth24plus",
-			usage: GPUTextureUsage.RENDER_ATTACHMENT
+			format: "rg16float",
+			usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING
+		});
+
+		const depthBuffer1 = this._device.createTexture({
+			size: [this._canvas.width, this._canvas.height],
+			sampleCount: this._sampleCount,
+			format: "rg16float",
+			usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING
 		});
 
 		this._renderTargetsSwapArray = [renderTarget0, renderTarget1];
+		this._depthBuffersSwapArray = [depthBuffer0, depthBuffer1];
 
 		this._resolutionDependentAssets = {
 			renderTarget0,
 			renderTarget1,
-			prevFrameRender,
-			depthTexture
+			depthBuffer0,
+			depthBuffer1
 		};
 	}
 
@@ -323,7 +326,6 @@ class MainModule
 		{
 			this._renderPassDescriptor.colorAttachments[0].view = this._resolutionDependentAssets.renderTarget0.createView();
 		}
-		this._renderPassDescriptor.depthStencilAttachment.view = this._resolutionDependentAssets.depthTexture.createView();
 	}
 
 	_handleResize()
@@ -341,7 +343,7 @@ class MainModule
 
 		this._createResolutionDependentAssests();
 		this._reapplyResolutionDependantAssests();
-		this._setupSamplerResourcesBindGroups();
+		this._setupTextureResourcesBindGroups();
 		this._updatePerspectiveMatrix();
 	}
 
@@ -974,7 +976,9 @@ class MainModule
 					},
 					{
 						format: "rgba16float"
-						// format: navigator.gpu.getPreferredCanvasFormat()
+					},
+					{
+						format: "rg16float"
 					}
 				]
 			},
@@ -989,13 +993,6 @@ class MainModule
 			multisample: {
 				count: this._sampleCount
 			},
-
-			// TODO: read more on this:
-			depthStencil: {
-				depthWriteEnabled: true,
-				depthCompare: "less",
-				format: "depth24plus"
-			}
 		};
 
 		const computePipelineDescriptor = {
@@ -1012,7 +1009,7 @@ class MainModule
 		this._computePipeline = this._device.createComputePipeline(computePipelineDescriptor);
 	}
 
-	_setupSamplerResourcesBindGroups()
+	_setupTextureResourcesBindGroups()
 	{
 		const samplersBindGroupLayout = this._device.createBindGroupLayout({
 			label: "samplers_bind_group_layout",
@@ -1027,6 +1024,13 @@ class MainModule
 				{
 					binding: 1,
 					visibility: GPUShaderStage.FRAGMENT,
+					texture: {
+						sampleType: "float"
+					}
+				},
+				{
+					binding: 2,
+					visibility: GPUShaderStage.FRAGMENT,
 					sampler: { type: "filtering" }
 				}
 			]
@@ -1036,7 +1040,7 @@ class MainModule
 
 		// For samplerBindGroups we user reverse order for binded renderTargets.
 		// First binding 1, then 0, because on first frame renderTarget0 is the output, renderTarget1 is input.
-		this._samplerBindGroups[0] = this._device.createBindGroup({
+		this._textureBindGroups[0] = this._device.createBindGroup({
 			label: "samplers_bind_group",
 			layout: samplersBindGroupLayout,
 			entries: [
@@ -1046,12 +1050,16 @@ class MainModule
 				},
 				{
 					binding: 1,
+					resource: this._resolutionDependentAssets.depthBuffer1.createView()
+				},
+				{
+					binding: 2,
 					resource: this._samplers.prevFrameSampler
 				}
 			]
 		});
 
-		this._samplerBindGroups[1] = this._device.createBindGroup({
+		this._textureBindGroups[1] = this._device.createBindGroup({
 			label: "samplers_bind_group",
 			layout: samplersBindGroupLayout,
 			entries: [
@@ -1061,6 +1069,10 @@ class MainModule
 				},
 				{
 					binding: 1,
+					resource: this._resolutionDependentAssets.depthBuffer0.createView()
+				},
+				{
+					binding: 2,
 					resource: this._samplers.prevFrameSampler
 				}
 			]
@@ -1257,6 +1269,7 @@ class MainModule
 		const clearColor = { r: 0., g: 0., b: 0., a: 1.0 };
 		this._renderPassDescriptor = {
 			colorAttachments: [
+				// Screen output
 				{
 					clearValue: clearColor,
 					loadOp: "clear",
@@ -1265,6 +1278,16 @@ class MainModule
 					view: undefined,
 					resolveTarget: undefined
 				},
+
+				// Screen buffer
+				{
+					view: undefined,
+					loadOp: "clear",
+					storeOp: "store",
+					clearValue: clearColor
+				},
+
+				// Depth buffer
 				{
 					view: undefined,
 					loadOp: "clear",
@@ -1272,25 +1295,7 @@ class MainModule
 					clearValue: clearColor
 				}
 			],
-
-			// TODO: read more on this depth stencil and color attachments.
-			depthStencilAttachment: {
-				view: this._resolutionDependentAssets.depthTexture.createView(),
-				depthClearValue: 1.0,
-				depthLoadOp: "clear",
-				depthStoreOp: "store"
-			},
 		};
-
-		if (this._sampleCount > 1)
-		{
-			this._renderPassDescriptor.colorAttachments[0].view = this._resolutionDependentAssets.renderTarget0.createView();
-			this._renderPassDescriptor.colorAttachments[0].resolveTarget = this._ctx.getCurrentTexture().createView();
-		}
-		else
-		{
-			this._renderPassDescriptor.colorAttachments[0].view = this._ctx.getCurrentTexture().createView();
-		}
 	}
 
 	_updateUniforms()
@@ -1315,24 +1320,19 @@ class MainModule
 	_renderPass(commandEncoder)
 	{
 		const simStepMod2 = this._simulationStep % 2;
-		if (this._sampleCount > 1)
-		{
-			this._renderPassDescriptor.colorAttachments[0].view = this._resolutionDependentAssets.renderTarget0.createView();
-			this._renderPassDescriptor.colorAttachments[0].resolveTarget = this._ctx.getCurrentTexture().createView();
-		}
-		else
-		{
-			this._renderPassDescriptor.colorAttachments[0].view = this._ctx.getCurrentTexture().createView();
-		}
 
 		// TODO: should we store created views somewhere instead?
+		this._renderPassDescriptor.colorAttachments[0].view = this._ctx.getCurrentTexture().createView();
 		this._renderPassDescriptor.colorAttachments[1].view = this._renderTargetsSwapArray[simStepMod2].createView();
+		this._renderPassDescriptor.colorAttachments[2].view = this._depthBuffersSwapArray[simStepMod2].createView();
+
 		const renderPassEncoder = commandEncoder.beginRenderPass(this._renderPassDescriptor);
 		renderPassEncoder.setPipeline(this._renderPipeline);
 		renderPassEncoder.setVertexBuffer(0, this._vertexBuffer);
 		renderPassEncoder.setIndexBuffer(this._indexBuffer, "uint32");
 		renderPassEncoder.setBindGroup(0, this._bindGroups[simStepMod2]);
-		renderPassEncoder.setBindGroup(1, this._samplerBindGroups[simStepMod2]);
+		renderPassEncoder.setBindGroup(1, this._textureBindGroups[simStepMod2]);
+
 		// this._indexBuffer.size/4 due to uint32 - 4 bytes per index.
 		// renderPassEncoder.drawIndexed(this._indexBuffer.size / 4, GRID_SIZE * GRID_SIZE * GRID_SIZE);
 		renderPassEncoder.drawIndexed(this._indexBuffer.size / 4, 1);
@@ -1382,16 +1382,6 @@ class MainModule
 
 		// First render current state.
 		this._renderPass(commandEncoder);
-
-		// commandEncoder.copyTextureToTexture(
-		// 	{
-		// 		texture: this._ctx.getCurrentTexture()
-		// 	},
-		// 	{
-		// 		texture: this._resolutionDependentAssets.prevFrameRender
-		// 	},
-		// 	[this._canvas.width, this._canvas.height]
-		// );
 
 		if (this._frameDuration >= MAX_COMPUTE_STEP_DURATION)
 		{

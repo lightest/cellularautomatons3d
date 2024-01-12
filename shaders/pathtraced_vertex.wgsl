@@ -11,7 +11,8 @@
 @group(0) @binding(11) var<uniform> uCommonBuffer: CommonBufferLayout;
 
 @group(1) @binding(0) var prevFrame: texture_2d<f32>;
-@group(1) @binding(1) var prevFrameSampler: sampler;
+@group(1) @binding(1) var depthBuffer: texture_2d<f32>;
+@group(1) @binding(2) var prevFrameSampler: sampler;
 
 struct ControlData {
 	pressedMouseButtons: vec3u,

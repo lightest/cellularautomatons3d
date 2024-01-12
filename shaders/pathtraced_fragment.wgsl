@@ -15,7 +15,8 @@ struct RayMarchOut {
 
 struct ShaderOut {
 	@location(0) presentation: vec4f,
-	@location(1) lightAndDepth: vec4f
+	@location(1) light: vec4f,
+	@location(2) depth: vec2f
 }
 
 // TODO: replace with uniforms.
@@ -133,16 +134,16 @@ fn calculateLigtingAndOcclusionAt(samplePoint: vec3f, vUv: vec2f) -> vec4f
 	// If sample point is occluded from light source by cube itself.
 	// If light is at the angle larger 90deg with face normal, that face is not hit by direct light at all.
 	let faceNormal = getCubeFaceNormal(samplePoint, cellOrigin);
-	// if (dot(faceNormal, lightDir) < 0.0f)
-	// {
-	// 	occlusionFactor = OCCLUSION_FACTOR;
-	// }
-	// else
-	// {
-	// 	let volumeIntersect = rayCubeIntersect(samplePoint, lightDir, vec3f(0.0f), vec3f(HALF_CUBE_SIZE));
-	// 	let volumeExit = samplePoint + lightDir * volumeIntersect.y;
-	// 	occlusionFactor = rayMarchShadow(samplePoint, volumeExit, i, rndOffset, 10.0f);
-	// }
+	if (dot(faceNormal, lightDir) < 0.0f)
+	{
+		occlusionFactor = OCCLUSION_FACTOR;
+	}
+	else
+	{
+		let volumeIntersect = rayCubeIntersect(samplePoint, lightDir, vec3f(0.0f), vec3f(HALF_CUBE_SIZE));
+		let volumeExit = samplePoint + lightDir * volumeIntersect.y;
+		occlusionFactor = rayMarchShadow(samplePoint, volumeExit, i, rndOffset, 10.0f);
+	}
 
 	let c = cellCoords / uGridSize;
 	let cellColor = vec4f(c.xy, 1f - c.x, 1f);
@@ -151,27 +152,10 @@ fn calculateLigtingAndOcclusionAt(samplePoint: vec3f, vUv: vec2f) -> vec4f
 	return out;
 }
 
-fn mixWithReprojectedPixel(currentSampleColor: vec4f, samplePos: vec3f, farthestMarchPos: vec3f, marchOrigin: vec3f) -> vec4f
+fn mixWithReprojectedColor(currentSampleColor: vec4f, prevSampleColor: vec4f, samplePos: vec3f, farthestMarchPos: vec3f, uv: vec2f) -> vec4f
 {
-	let prevFrameSamplePos: vec4f = uPrevProjViewMatInv * vec4f(samplePos, 1.0f);
-	let curFrameSamplePos: vec4f = uProjViewMatInv * vec4f(samplePos, 1.0f);
-	let currentMarchDepth = length(marchOrigin - samplePos);
-
-	// Converting to clipspace ranged [-1, 1].
-	let prevFrameSamplePosClipSpace = prevFrameSamplePos / prevFrameSamplePos.w;
-
-	// Converting to [0, 1] range.
-	// Note the .y component has to be flipped.
-	// This is due to it going from top to bottom, rather than bottom to top, which we want.
-	let uv: vec2f = vec2f(prevFrameSamplePosClipSpace.x, -prevFrameSamplePosClipSpace.y) * 0.5f + 0.5f;
-	// let prevFrameShaderOut = textureSample(prevFrame, prevFrameSampler, uv);
-	let prevFrameShaderOut = textureLoad(prevFrame, vec2i(uv * uWindowSize), 0);
-	var prevFrameColor = vec4f(prevFrameShaderOut.xyz, 1.0f);
-	var prevFrameMarchDepth = prevFrameShaderOut.w;
-
-	// TODO: test if there are differences between textureSample and textureLoad.
-	// var prevFrameColor = textureLoad(prevFrame, vec2i(uv * uWindowSize), 0);
 	var temporalAlpha = 0.1f;
+	var prevColor = prevSampleColor;
 	// temporalAlpha = 1.f;
 
 	// Only apply reprojection within the range of positive uvs.
@@ -180,8 +164,7 @@ fn mixWithReprojectedPixel(currentSampleColor: vec4f, samplePos: vec3f, farthest
 	// Applying it there would cause ghosting, rather just leave the current sample as is.
 	if (uv.x < 0.0f || uv.x > 1.0f || uv.y < 0.0f || uv.y > 1.0f)
 	{
-		prevFrameColor = currentSampleColor;
-		prevFrameMarchDepth = currentMarchDepth;
+		prevColor = currentSampleColor;
 	}
 
 	if (all(samplePos == farthestMarchPos))
@@ -193,7 +176,48 @@ fn mixWithReprojectedPixel(currentSampleColor: vec4f, samplePos: vec3f, farthest
 		temporalAlpha = mix(temporalAlpha, 1.0f, v);
 	}
 
-	var mixedColor = clamp(mix(prevFrameColor, currentSampleColor, temporalAlpha), vec4f(0.0f), vec4f(1.0f));
+	var mixedColor = clamp(mix(prevColor, currentSampleColor, temporalAlpha), vec4f(0.0f), vec4f(1.0f));
+
+	return mixedColor;
+}
+
+fn getReprojectedUV(samplePos: vec3f) -> vec2f
+{
+	let sampleProjectedToPrevViewpoint: vec4f = uPrevProjViewMatInv * vec4f(samplePos, 1.0f);
+
+	// Converting to clipspace ranged [-1, 1].
+	let reprojectedSampleClipSpace = sampleProjectedToPrevViewpoint / sampleProjectedToPrevViewpoint.w;
+
+	// Converting to [0, 1] range.
+	// Note the .y component has to be flipped.
+	// This is due to it going from top to bottom, rather than bottom to top, which we want.
+	let uv: vec2f = vec2f(reprojectedSampleClipSpace.x, -reprojectedSampleClipSpace.y) * 0.5f + 0.5f;
+
+	return uv;
+}
+
+fn mixWithReprojectedDepth(current: vec2f, prev: vec2f, samplePos: vec3f, farthestMarchPos: vec3f, uv: vec2f) -> vec4f
+{
+	var temporalAlpha = 0.1f;
+	var prevDepth = prev;
+
+	if (all(samplePos == farthestMarchPos))
+	{
+		let cameraPos = viewMat[3].xyz;
+		let prevCameraPos = uPrevViewMat[3].xyz;
+		let MAX_NO_GHOST_V: f32 = .0025;
+		let v: f32 = clamp(length(cameraPos - prevCameraPos), 0.0f, MAX_NO_GHOST_V) / MAX_NO_GHOST_V;
+		temporalAlpha = mix(temporalAlpha, 1.0f, v);
+	}
+
+	// Only apply reprojection within the range of positive uvs.
+	// Clamping does not matter here, since it's the pixels we care about not the values.
+	// In pixel positions where uvs are negative we don't need reprojection.
+	// Applying it there would cause ghosting, rather just leave the current sample as is.
+	if (uv.x < 0.0f || uv.x > 1.0f || uv.y < 0.0f || uv.y > 1.0f)
+	{
+		prevDepth = current;
+	}
 
 	// Discard previous depth if reprojected position changed. This means observer / camera moved.
 	if (any(uPrevProjViewMatInv[0] != uProjViewMatInv[0]) ||
@@ -201,14 +225,18 @@ fn mixWithReprojectedPixel(currentSampleColor: vec4f, samplePos: vec3f, farthest
 		any(uPrevProjViewMatInv[2] != uProjViewMatInv[2]) ||
 		any(uPrevProjViewMatInv[3] != uProjViewMatInv[3]))
 	{
-		// prevFrameMarchDepth = currentMarchDepth;
-		prevFrameMarchDepth = clamp(mix(prevFrameMarchDepth, currentMarchDepth, temporalAlpha), 0.0f, 1.0f);
+		// prevDepth = current;
+		// let mixedDepth = clamp(mix(prevDepth.r, current.r, temporalAlpha), 0.0f, 1.0f);
+		let mixedDepth = current.r;
+		return vec4f(mixedDepth, 0.0f, 0.0f, 1.0f);
 	}
 
+	let minDepth = min(prevDepth.r, current.r);
 
-	let minDepth = min(prevFrameMarchDepth, currentMarchDepth);
+	// Using constant 1.0f temporalAlpha here, to converge faster on minDepth.
+	let mixedDepth = clamp(mix(prevDepth.r, minDepth, 1.0f), 0.0f, 1.0f);
 
-	return vec4f(mixedColor.xyz, minDepth);
+	return vec4f(mixedDepth, 0.0f, 0.0f, 1.0f);
 }
 
 fn calculateLigtingAt(samplePoint: vec3f, cellOrigin: vec3f, initialMaterialColor: vec4f) -> vec4f
@@ -298,26 +326,6 @@ fn rayMarch(start: vec3f, end: vec3f, vUv: vec2f, steps: f32) -> RayMarchOut
 	var cellColor = vec4f(0.0f);
 	var occlusionFactor: f32 = 1.0f;
 
-	let uv = vec2<i32>(floor(vec2f(vUv.x, 1 - vUv.y) * uWindowSize));
-	let prevFrameShaderOut = vec4f(textureLoad(prevFrame, uv, 0));
-
-	// First before marching try to reuse depth from previously rendered frame.
-	if (prevFrameShaderOut.w < marchDepth && prevFrameShaderOut.w > 0.0)
-	{
-		// depth = max(depth, prevFrameShaderOut.w);
-		// samplePoint = start + dir * prevFrameShaderOut.w;
-		// cellCoords = floor((samplePoint + HALF_CUBE_SIZE) / cellSize);
-		// cellOrigin = cellCoords * cellSize + cellSize * 0.5f - HALF_CUBE_SIZE;
-		// i = getCellIdx(cellCoords);
-		// if (cellStates[i] == 1)
-		// {
-		// 	depth = max(depth, prevFrameShaderOut.w);
-		// }
-		// out.color = vec4f(1, 0, 0, 1);
-		// out.finalSamplePoint = start + dir * depth;
-		// return out;
-	}
-
 	while(depth < marchDepth)
 	{
 		samplePoint = start + dir * depth;
@@ -342,11 +350,6 @@ fn rayMarch(start: vec3f, end: vec3f, vUv: vec2f, steps: f32) -> RayMarchOut
 				if (cellIntersectForward.x <= cellIntersectForward.y)
 				{
 					samplePoint = start + dir * cellIntersectForward.x;
-					// if (prevFrameShaderOut.w < cellIntersectForward.x)
-					// {
-					// 	samplePoint = start + dir * prevFrameShaderOut.w;
-					// }
-
 					let lightDir = normalize(lightSource.pos - samplePoint);
 
 					// If sample point is occluded from light source by cube itself.
@@ -366,14 +369,8 @@ fn rayMarch(start: vec3f, end: vec3f, vUv: vec2f, steps: f32) -> RayMarchOut
 					let c = cellCoords / uGridSize;
 					cellColor = vec4f(c.xy, 1f - c.x, 1f);
 					out.color = calculateLigtingAt(samplePoint, cellOrigin, cellColor) * occlusionFactor;
-					// if (prevFrameShaderOut.w < marchDepth)
-					// {
-					// 	out.color = vec4f(1, 0, 0, 1);
-					// }
-					// out.finalSamplePoint = samplePoint;
+					out.finalSamplePoint = samplePoint;
 
-					// Use original depth to preserve depth buffer quality.
-					out.finalSamplePoint = start + dir * depth;
 					return out;
 				}
 			}
@@ -383,58 +380,68 @@ fn rayMarch(start: vec3f, end: vec3f, vUv: vec2f, steps: f32) -> RayMarchOut
 		}
 
 		depth += stepSize;
-		// if (prevFrameShaderOut.w < marchDepth)
-		// 	{
-		// 		out.color = vec4f(1, 0, 0, 1);
-		// 	}
 	}
 
 	out.finalSamplePoint = end;
 
-	// Did we had a previously found depth that is closer than current march?
-	// If so try to reuse it.
-	// if (prevFrameShaderOut.w < marchDepth)
-	// {
-	// 	samplePoint = start + dir * prevFrameShaderOut.w;
-	// 	cellCoords = floor((samplePoint + HALF_CUBE_SIZE) / cellSize);
-	// 	cellOrigin = cellCoords * cellSize + cellSize * 0.5f - HALF_CUBE_SIZE;
-	// 	i = getCellIdx(cellCoords);
+	return out;
+}
 
-	// 	if (cellStates[i] == 1)
-	// 	{
-	// 		// cellCoords = floor((samplePoint + HALF_CUBE_SIZE) / cellSize);
-	// 		// cellOrigin = cellCoords * cellSize + cellSize * 0.5f - HALF_CUBE_SIZE;
-	// 		// i = getCellIdx(cellCoords);
-	// 		let lightDir = normalize(lightSource.pos - samplePoint);
+fn rayMarchDepth(start: vec3f, end: vec3f, vUv: vec2f, steps: f32) -> RayMarchOut
+{
+	var out: RayMarchOut;
+	out.color = vec4f(0.0f, 0.0f, 0.0f, 1.0f);
+	out.farthestMarchPoint = end;
+	var i: u32 = 0;
+	let dir = normalize(end - start);
+	let marchDepth = length(end - start);
+	let stepSize = marchDepth / steps;
+	let rndOffset = n1rand(vUv);
+	var depth = stepSize * rndOffset + 0.01f;
+	var samplePoint = vec3f(0.0f);
+	let cellSize = FULL_CUBE_SIZE / uGridSize;
 
-	// 		// If sample point is occluded from light source by cube itself.
-	// 		// If light is at the angle larger 90deg with face normal, that face is not hit by direct light at all.
-	// 		let faceNormal = getCubeFaceNormal(samplePoint, cellOrigin);
-	// 		if (dot(faceNormal, lightDir) < 0.0f)
-	// 		{
-	// 			occlusionFactor = OCCLUSION_FACTOR;
-	// 		}
-	// 		else
-	// 		{
-	// 			let volumeIntersect = rayCubeIntersect(samplePoint, lightDir, vec3f(0.0f), vec3f(HALF_CUBE_SIZE));
-	// 			let volumeExit = samplePoint + lightDir * volumeIntersect.y;
-	// 			occlusionFactor = rayMarchShadow(samplePoint, volumeExit, i, rndOffset, 10.0f);
-	// 		}
+	// Actual visible cell size might be smaller than the volume cell it is occupying.
+	let actualVisibleCubeSize = cellSize * uCellSize * 0.5f;
+	var cellCoords = vec3f(0.0f);
+	var cellOrigin = vec3f(0.0f);
 
-	// 		let c = cellCoords / uGridSize;
-	// 		cellColor = vec4f(c.xy, 1f - c.x, 1f);
-	// 		out.color = calculateLigtingAt(samplePoint, cellOrigin, cellColor) * occlusionFactor;
-	// 		// if (prevFrameShaderOut.w < marchDepth)
-	// 		// {
-	// 		// 	out.color = vec4f(1, 0, 0, 1);
-	// 		// }
-	// 		out.finalSamplePoint = samplePoint;
-	// 		// out.color = vec4f(1, 0, 0, 1);
-	// 		// out.finalSamplePoint = samplePoint;
-	// 		// return out;
-	// 	}
+	while(depth < marchDepth)
+	{
+		samplePoint = start + dir * depth;
+		out.finalSamplePoint = samplePoint;
 
-	// }
+		// Shifting inside the volume to calculate cells in [0, ... uGridSize] range.
+		// As if the volume is completely in the positive domain.
+		// TODO: improve this such that it takes into account volume's position.
+		cellCoords = floor((samplePoint + HALF_CUBE_SIZE) / cellSize);
+		cellOrigin = cellCoords * cellSize + cellSize * 0.5f - HALF_CUBE_SIZE;
+		i = getCellIdx(cellCoords);
+
+		if (cellStates[i] == 1)
+		{
+			// If we know we're in the cell that is active, the sample point might be anywhere relatively to the visible cube within it.
+			// So we find an intersection point on the view ray and snap sample point to the cube.
+			// This allows to get lighting calculations at correct point in space and thus reduce noise by making "hits" more accurate.
+			let cellIntersectForward = rayCubeIntersect(start, dir, cellOrigin, actualVisibleCubeSize);
+
+			if (cellIntersectForward.y >= 0.0f)
+			{
+				if (cellIntersectForward.x <= cellIntersectForward.y)
+				{
+					out.finalSamplePoint = start + dir * cellIntersectForward.x;
+					return out;
+				}
+			}
+
+			// If we didn't hit anything it means visible cube is actually smaller than the cell it's occupying.
+			// Just continue marching along the ray until we hit something.
+		}
+
+		depth += stepSize;
+	}
+
+	out.finalSamplePoint = end;
 
 	return out;
 }
@@ -471,7 +478,8 @@ fn fragment_main(fragData: VertexOut) -> ShaderOut
 			// cubeExitPoint = cameraPos + viewRay * cubeIntersections.y;
 		}
 
-		rayMarchOut = rayMarch(cubeEnterPoint, cubeExitPoint, fragData.vUv, 25.0f);
+		// rayMarchOut = rayMarch(cubeEnterPoint, cubeExitPoint, fragData.vUv, 25.0f);
+		rayMarchOut = rayMarchDepth(cubeEnterPoint, cubeExitPoint, fragData.vUv, 25.0f);
 		out = rayMarchOut.color;
 		// out = vec4f(1.0f, 0.0f, 0.0f, 1.0f);
 	}
@@ -493,46 +501,54 @@ fn fragment_main(fragData: VertexOut) -> ShaderOut
 		}
 	}
 
-	// Gamma correction with 2.2f.
-	out = vec4f(pow(out.xyz, vec3f(1 / 2.2f)), out.w);
-
 	// Common buffer allignment tests.
 	// out = vec4f(uCommonBuffer.data.f1, 1.0f);
 	// out = vec4f(vec3f(uCommonBuffer.data.f0, 0, 0), 1.0f);
 
-	// Temporal reprojection.
-	let mixed = mixWithReprojectedPixel(out, rayMarchOut.finalSamplePoint, rayMarchOut.farthestMarchPoint, cubeEnterPoint);
+	let uv = getReprojectedUV(rayMarchOut.finalSamplePoint);
+	let prevColor = textureLoad(prevFrame, vec2i(uv * uWindowSize), 0);
+	let prevDepth = textureLoad(depthBuffer, vec2i(uv * uWindowSize), 0).xy;
+	let mixedDepth = mixWithReprojectedDepth(
+		vec2f(length(cubeEnterPoint - rayMarchOut.finalSamplePoint), 1.0),
+		prevDepth,
+		rayMarchOut.finalSamplePoint,
+		rayMarchOut.farthestMarchPoint,
+		uv
+	);
 
-	// TODO: this is due to sampling inside mixWithReprojectedPixel() has to be in uniform control flow.
+	out = calculateLigtingAndOcclusionAt(cubeEnterPoint + viewRay * mixedDepth.r, fragData.vUv);
+
+	// Gamma correction with 2.2f.
+	// out = vec4f(pow(out.xyz, vec3f(1 / 2.2f)), out.w);
+
+	let mixedColor = mixWithReprojectedColor(out, prevColor, rayMarchOut.finalSamplePoint, rayMarchOut.farthestMarchPoint, uv);
+	out = mixedColor;
+
+	// TODO: this is due to sampling inside mixWithReprojectedColor() has to be in uniform control flow.
 	// Better ideas?
 	if (cubeIntersections.x <= cubeIntersections.y && cubeIntersections.y >= 0.0f)
 	{
-		if (mixed.w < length(cubeExitPoint - cubeEnterPoint) - .1)
+		if (mixedDepth.r < length(cubeExitPoint - cubeEnterPoint) - .1)
 		{
-			out = calculateLigtingAndOcclusionAt(cubeEnterPoint + viewRay * mixed.w, fragData.vUv);
+			// out = calculateLigtingAndOcclusionAt(cubeEnterPoint + viewRay * mixedDepth.r, fragData.vUv);
 		}
-		out = vec4f(out.xyz, 1.0f);
-		out = vec4f(pow(out.xyz, vec3f(1 / 2.2f)), out.w);
+		// out = vec4f(out.xyz, 1.0f);
+		// out = vec4f(pow(out.xyz, vec3f(1 / 2.2f)), out.w);
 	}
 
 	// let tex = textureSample(prevFrame, prevFrameSampler, fragData.vUv * 2.0f);
 
 	if (fragData.vUv.x < 0.5f && fragData.vUv.y < 0.5f)
 	{
-		let uv = vec2<i32>(floor(vec2f(fragData.vUv.x * 2, 1 - fragData.vUv.y * 2) * uWindowSize));
-		out = vec4f(vec3f(textureLoad(prevFrame, uv, 0).w), 1);
+		// let uv = vec2<i32>(floor(vec2f(fragData.vUv.x, .5 - fragData.vUv.y) * 2 * uWindowSize));
+		// out = vec4f(vec3f(textureLoad(depthBuffer, uv, 0).r), 1);
+		out = vec4f(mixedDepth.r, 0, 0, 1);
 	}
 
-	// let uv = vec2<i32>(floor(vec2f(fragData.vUv.x, 1 - fragData.vUv.y) * uWindowSize));
-	// var d = textureLoad(prevFrame, uv, 0).w;
-	// if (d == 0)
-	// {
-	// 	d = 1;
-	// }
-
-	shaderOut.presentation = out;
-	shaderOut.lightAndDepth = vec4f(out.xyz, mixed.w);
-	// shaderOut.lightAndDepth = vec4f(out.xyz, d);
+	// Gamma correction with 2.2f.
+	shaderOut.presentation = vec4f(pow(out.xyz, vec3f(1 / 2.2f)), out.w);
+	shaderOut.light = vec4f(out.xyz, 1.0f);
+	shaderOut.depth = vec2f(mixedDepth.r, 1.0f);
 
 	return shaderOut;
 }
