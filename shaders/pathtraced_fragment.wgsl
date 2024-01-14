@@ -182,7 +182,7 @@ fn calculateLigtingAndOcclusionAt(samplePoint: vec3f, vUv: vec2f) -> vec4f
 	return out;
 }
 
-fn mixWithReprojectedColor(currentSampleColor: vec4f, prevSampleColor: vec4f, samplePos: vec3f, farthestMarchPos: vec3f, uv: vec2f) -> vec4f
+fn mixWithReprojectedColor(currentSampleColor: vec4f, prevSampleColor: vec4f, samplePos: vec3f, farthestMarchPos: vec3f, uvReprojected: vec2f) -> vec4f
 {
 	var temporalAlpha = 0.1f;
 	var prevColor = prevSampleColor;
@@ -192,7 +192,7 @@ fn mixWithReprojectedColor(currentSampleColor: vec4f, prevSampleColor: vec4f, sa
 	// Clamping does not matter here, since it's the pixels we care about not the values.
 	// In pixel positions where uvs are negative we don't need reprojection.
 	// Applying it there would cause ghosting, rather just leave the current sample as is.
-	if (uv.x < 0.0f || uv.x > 1.0f || uv.y < 0.0f || uv.y > 1.0f)
+	if (uvReprojected.x < 0.0f || uvReprojected.x > 1.0f || uvReprojected.y < 0.0f || uvReprojected.y > 1.0f)
 	{
 		prevColor = currentSampleColor;
 	}
@@ -226,7 +226,7 @@ fn getReprojectedUV(samplePos: vec3f) -> vec2f
 	return uv;
 }
 
-fn mixWithReprojectedDepth(current: vec2f, prev: vec2f, samplePoint: vec3f, farthestMarchPos: vec3f, uv: vec2f) -> vec4f
+fn mixWithReprojectedDepth(current: vec2f, prev: vec2f, samplePoint: vec3f, farthestMarchPos: vec3f, uvReprojected: vec2f) -> vec4f
 {
 	var temporalAlpha = 0.1f;
 	var prevDepth = prev.r;
@@ -244,7 +244,7 @@ fn mixWithReprojectedDepth(current: vec2f, prev: vec2f, samplePoint: vec3f, fart
 	// Clamping does not matter here, since it's the pixels we care about not the values.
 	// In pixel positions where uvs are negative we don't need reprojection.
 	// Applying it there would cause ghosting, rather just leave the current sample as is.
-	if (uv.x < 0.0f || uv.x > 1.0f || uv.y < 0.0f || uv.y > 1.0f)
+	if (uvReprojected.x < 0.0f || uvReprojected.x > 1.0f || uvReprojected.y < 0.0f || uvReprojected.y > 1.0f)
 	{
 		prevDepth = current.r;
 	}
@@ -255,10 +255,10 @@ fn mixWithReprojectedDepth(current: vec2f, prev: vec2f, samplePoint: vec3f, fart
 		any(uPrevProjViewMatInv[2] != uProjViewMatInv[2]) ||
 		any(uPrevProjViewMatInv[3] != uProjViewMatInv[3]))
 	{
-		let mixedDepth = current.r;
+		// let mixedDepth = current.r;
 		// let mixedDepth = clamp(mix(prevDepth, current.r, 0.5f), 0.0f, 1.0f);
 		// let mixedDepth = min(prevDepth.r, current.r);
-		return vec4f(mixedDepth, 0.0f, 0.0f, 1.0f);
+		// return vec4f(mixedDepth, 0.0f, 0.0f, 1.0f);
 	}
 
 	let minDepth = min(prevDepth, current.r);
@@ -476,15 +476,19 @@ fn rayMarchDepth(start: vec3f, end: vec3f, vUv: vec2f, steps: f32) -> RayMarchOu
 	return out;
 }
 
-fn estimateLikelyDepth(samplePoint: vec3f, prev: vec2f, uv: vec2f) -> vec2f
+fn estimateLikelyDepth(samplePoint: vec3f, prevDepth: vec2f, prevDepthReprojected: vec2f, vUv: vec2f) -> vec2f
 {
 	let cameraPos = viewMat[3].xyz;
 	let prevCameraPos = uPrevViewMat[3].xyz;
 	let currentDepth = length(samplePoint - cameraPos);
-	var prevDepth = prev.r;
-	let viewRay = normalize(samplePoint - cameraPos);
-	let prevViewRay = normalize(uPrevViewMat * getRay(uv)).xyz;
-	let prevSamplePoint = prevCameraPos + prevViewRay * prevDepth;
+	var prevDepthRe = prevDepthReprojected.r;
+	let ray = getRay(vUv);
+	let viewRay = normalize(viewMat * ray).xyz;
+	let prevViewRay = normalize(uPrevViewMat * ray).xyz;
+	let prevSamplePoint = prevCameraPos + prevViewRay * prevDepth.r;
+	let reprojectedSamplePoint = prevCameraPos + viewRay * prevDepthReprojected.r;
+
+	// By default taking current sample.
 	var likelyDepth = vec2f(currentDepth, 0.0f);
 
 	let cellSize = FULL_CUBE_SIZE / uGridSize;
@@ -493,24 +497,33 @@ fn estimateLikelyDepth(samplePoint: vec3f, prev: vec2f, uv: vec2f) -> vec2f
 	let actualVisibleCubeSize = cellSize * uCellSize * 0.5f;
 
 	let prevCell = getCellFromSamplePoint(prevSamplePoint);
+	let reprojectedCell = getCellFromSamplePoint(reprojectedSamplePoint);
 	let curCell = getCellFromSamplePoint(samplePoint);
 
-	if (any(uPrevProjViewMatInv[0] != uProjViewMatInv[0]) ||
-		any(uPrevProjViewMatInv[1] != uProjViewMatInv[1]) ||
-		any(uPrevProjViewMatInv[2] != uProjViewMatInv[2]) ||
-		any(uPrevProjViewMatInv[3] != uProjViewMatInv[3]))
+	// Compare current sample of depth with what we had on the previous frame, reprojected to new samplePoint.
+	// Using reprojected depth, we obtain a cell and check if it's alive.
+	// If what we hit on this fram is not the same cell, we overstepped it either on this frame or on previous.
+	// If reprojected depth from previous frame is closer, we likely overstepped this frame.
+	// Thus we run cube intersection check for the cell derrived using reprojected depth to get an accurate result.
+	if (cellStates[reprojectedCell.idx] == 1 && curCell.idx != reprojectedCell.idx && prevDepthRe < currentDepth)
 	{
-		// Means we either hit a new cell or missed (overstepped) id.
-		if (cellStates[prevCell.idx] == 1 && curCell.idx != prevCell.idx)
+		let intersecData = rayCubeIntersect(cameraPos, viewRay, reprojectedCell.cellOrigin, actualVisibleCubeSize);
+		if (intersecData.x <= intersecData.y && intersecData.x >= 0)
 		{
-			// Check if we intersect same cell as on previous frame, in case we overstepped.
-			let intersecData = rayCubeIntersect(cameraPos, viewRay, prevCell.cellOrigin, actualVisibleCubeSize);
-			if (intersecData.x <= intersecData.y && intersecData.x >= 0)
-			{
-				likelyDepth.r = intersecData.x;
-			}
+			likelyDepth.r = intersecData.x;
 		}
 	}
+
+	// if (cellStates[prevCell.idx] == 1 && curCell.idx != prevCell.idx && prevDepthRe < currentDepth)
+	// {
+	// 	let intersecData = rayCubeIntersect(cameraPos, viewRay, prevCell.cellOrigin, actualVisibleCubeSize);
+	// 	if (intersecData.x <= intersecData.y && intersecData.x >= 0)
+	// 	{
+	// 		likelyDepth.r = intersecData.x;
+	// 	}
+	// }
+
+	// Otherwise, current sample gives closest depth, so we use that.
 
 	return likelyDepth;
 }
@@ -535,6 +548,7 @@ fn fragment_main(fragData: VertexOut) -> ShaderOut
 
 	var cubeEnterPoint = cameraPos;
 	var cubeExitPoint = cameraPos + viewRay * cubeIntersections.y;
+	var s = 0.0f;
 
 	if (cubeIntersections.x <= cubeIntersections.y && cubeIntersections.y >= 0.0f)
 	{
@@ -548,26 +562,31 @@ fn fragment_main(fragData: VertexOut) -> ShaderOut
 		// rayMarchOut = rayMarch(cubeEnterPoint, cubeExitPoint, fragData.vUv, 25.0f);
 		rayMarchOut = rayMarchDepth(cubeEnterPoint, cubeExitPoint, fragData.vUv, 25.0f);
 		out = rayMarchOut.color;
-		let uv = getReprojectedUV(rayMarchOut.finalSamplePoint);
-		let prevColor = textureLoad(prevFrame, vec2i(uv * uWindowSize), 0);
+		let uv = vec2f(fragData.vUv.x, 1.0 - fragData.vUv.y);
+		let uvReprojected = getReprojectedUV(rayMarchOut.finalSamplePoint);
+		let prevColor = textureLoad(prevFrame, vec2i(uvReprojected * uWindowSize), 0);
 		// var currentDepth = vec2f(length(cameraPos - rayMarchOut.finalSamplePoint), 0.0f);
 		let prevDepth = textureLoad(depthBuffer, vec2i(uv * uWindowSize), 0).xy;
-		let currentDepth = estimateLikelyDepth(rayMarchOut.finalSamplePoint, prevDepth, fragData.vUv);
+		let prevDepthReprojected = textureLoad(depthBuffer, vec2i(uvReprojected * uWindowSize), 0).xy;
+		let currentDepth = estimateLikelyDepth(rayMarchOut.finalSamplePoint, prevDepth, prevDepthReprojected, fragData.vUv);
 
-		mixedDepth = mixWithReprojectedDepth(
-			currentDepth,
-			prevDepth,
-			rayMarchOut.finalSamplePoint,
-			rayMarchOut.farthestMarchPoint,
-			uv
-		);
+		mixedDepth = vec4f(currentDepth, 0, 1);
+
+		// mixedDepth = mixWithReprojectedDepth(
+		// 	currentDepth,
+		// 	prevDepthReprojected,
+		// 	rayMarchOut.finalSamplePoint,
+		// 	rayMarchOut.farthestMarchPoint,
+		// 	uvReprojected
+		// );
 
 		// mixedDepth.r = currentDepth.r;
 
 		out = calculateLigtingAndOcclusionAt(cameraPos + viewRay * mixedDepth.r, fragData.vUv);
 
-		mixedColor = mixWithReprojectedColor(out, prevColor, rayMarchOut.finalSamplePoint, rayMarchOut.farthestMarchPoint, uv);
+		mixedColor = mixWithReprojectedColor(out, prevColor, rayMarchOut.finalSamplePoint, rayMarchOut.farthestMarchPoint, uvReprojected);
 		out = mixedColor;
+		s = prevDepthReprojected.r;
 		// out = vec4f(1.0f, 0.0f, 0.0f, 1.0f);
 	}
 
