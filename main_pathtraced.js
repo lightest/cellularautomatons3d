@@ -1,7 +1,7 @@
 import { UI } from "./ui.js";
 import { vec3, mat4, quat } from "./libs/wgpu-matrix.module.js";
 
-const GRID_SIZE = 32;
+const GRID_SIZE = 64;
 const WORK_GROUP_SIZE = 4;
 const MAX_COMPUTE_STEP_DURATION = 16; // Amount of ms to hold one frame of simulation for.
 const TRANSLATION_SPEED = .15;
@@ -252,9 +252,11 @@ class MainModule
 		vertexSrc = await vertexSrc.text();
 		let fragmentSrc = await fetch("./shaders/pathtraced_fragment.wgsl");
 		fragmentSrc = await fragmentSrc.text();
-		const shaders = `${vertexSrc}\n${fragmentSrc}`;
 
-		return shaders;
+		return {
+			vertexSrc,
+			fragmentSrc
+		};
 	}
 
 	async _getComputeShaderSources ()
@@ -922,14 +924,13 @@ class MainModule
 	async _setupPipelines()
 	{
 		// TODO: Should this be a separate func?
-		const shaderCode = await this._getShaderSources();
-		const computeShaderCode = await this._getComputeShaderSources();
-		const shaderModule = this._device.createShaderModule({
-			code: shaderCode
-		});
+		const shaderSources = await this._getShaderSources();
+		const computeShaderSources = await this._getComputeShaderSources();
+		const vertexShaderModule = this._device.createShaderModule({ code: shaderSources.vertexSrc });
+		const fragmentShaderModule = this._device.createShaderModule({ code: shaderSources.fragmentSrc });
 
 		const computeShaderModule = this._device.createShaderModule({
-			code: computeShaderCode
+			code: computeShaderSources
 		});
 
 		const renderPipelineLayout = this._device.createPipelineLayout({
@@ -962,13 +963,13 @@ class MainModule
 
 		const renderPipelineDescriptor = {
 			vertex: {
-				module: shaderModule,
+				module: vertexShaderModule,
 				entryPoint: "vertex_main",
 				buffers: buffersLayout,
 			},
 
 			fragment: {
-				module: shaderModule,
+				module: fragmentShaderModule,
 				entryPoint: "fragment_main",
 				targets: [
 					{
@@ -995,7 +996,8 @@ class MainModule
 			},
 		};
 
-		const computePipelineDescriptor = {
+		const computePipelineDescriptor =
+		{
 			layout: this._device.createPipelineLayout({
 				bindGroupLayouts: [this._bindGroupLayouts[0]]
 			}),

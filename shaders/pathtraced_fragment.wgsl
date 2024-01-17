@@ -1,3 +1,51 @@
+@group(0) @binding(0) var<uniform> uGridSize: vec3f;
+@group(0) @binding(2) var<storage> cellStates: array<u32>;
+@group(0) @binding(4) var<uniform> viewMat: mat4x4f;
+@group(0) @binding(5) var<uniform> uProjViewMatInv: mat4x4f;
+@group(0) @binding(6) var<uniform> uPrevViewMat: mat4x4f;
+@group(0) @binding(7) var<uniform> uPrevProjViewMatInv: mat4x4f;
+@group(0) @binding(8) var<uniform> lightSource: LightSource;
+@group(0) @binding(9) var<uniform> uWindowSize: vec2f;
+@group(0) @binding(10) var<uniform> uT: f32;
+@group(0) @binding(11) var<uniform> uCommonBuffer: CommonBufferLayout;
+
+@group(1) @binding(0) var prevFrame: texture_2d<f32>;
+@group(1) @binding(1) var depthBuffer: texture_2d<f32>;
+@group(1) @binding(2) var prevFrameSampler: sampler;
+
+struct LightSource {
+	pos: vec3f,
+	magnitude: f32
+};
+
+struct TestStruct {
+	f0: vec3f,
+	f1: vec3f
+}
+
+struct TestStruct2
+{
+	f1: vec3f,
+	f0: f32
+}
+
+struct CommonBufferLayout {
+	lightSource: TestStruct,
+	data: TestStruct2
+}
+
+struct VertexOut {
+	@builtin(position) position: vec4f,
+	// @location(0) color: vec4f,
+	@location(1) worldPosition: vec4f,
+	@location(2) cell: vec3f,
+	@location(3) @interpolate(flat) pointerIdx: u32,
+	@location(4) @interpolate(flat) instance: u32,
+	@location(5) normal: vec3f,
+	@location(6) worldNormal: vec3f,
+	@location(7) vUv: vec2f
+}
+
 const PI: f32 = 3.14159265359;
 const PI2: f32 = PI * 2.0f;
 const inv4PI: f32 = 1.0f / (4.0f * PI);
@@ -485,8 +533,9 @@ fn estimateLikelyDepth(samplePoint: vec3f, prevDepth: vec2f, prevDepthReprojecte
 	let ray = getRay(vUv);
 	let viewRay = normalize(viewMat * ray).xyz;
 	let prevViewRay = normalize(uPrevViewMat * ray).xyz;
+	let viewRay2 = normalize(samplePoint - prevCameraPos);
 	let prevSamplePoint = prevCameraPos + prevViewRay * prevDepth.r;
-	let reprojectedSamplePoint = prevCameraPos + viewRay * prevDepthReprojected.r;
+	let reprojectedSamplePoint = prevCameraPos + viewRay2 * prevDepthReprojected.r;
 
 	// By default taking current sample.
 	var likelyDepth = vec2f(currentDepth, 0.0f);
@@ -502,7 +551,7 @@ fn estimateLikelyDepth(samplePoint: vec3f, prevDepth: vec2f, prevDepthReprojecte
 
 	// Compare current sample of depth with what we had on the previous frame, reprojected to new samplePoint.
 	// Using reprojected depth, we obtain a cell and check if it's alive.
-	// If what we hit on this fram is not the same cell, we overstepped it either on this frame or on previous.
+	// If what we hit on this frame is not the same cell, we overstepped the cell either on this frame or on previous.
 	// If reprojected depth from previous frame is closer, we likely overstepped this frame.
 	// Thus we run cube intersection check for the cell derrived using reprojected depth to get an accurate result.
 	if (cellStates[reprojectedCell.idx] == 1 && curCell.idx != reprojectedCell.idx && prevDepthRe < currentDepth)
@@ -523,7 +572,7 @@ fn estimateLikelyDepth(samplePoint: vec3f, prevDepth: vec2f, prevDepthReprojecte
 	// 	}
 	// }
 
-	// Otherwise, current sample gives closest depth, so we use that.
+	// Otherwise, current sample gives closest depth, so we use it.
 
 	return likelyDepth;
 }

@@ -5,14 +5,6 @@
 @group(0) @binding(5) var<uniform> uProjViewMatInv: mat4x4f;
 @group(0) @binding(6) var<uniform> uPrevViewMat: mat4x4f;
 @group(0) @binding(7) var<uniform> uPrevProjViewMatInv: mat4x4f;
-@group(0) @binding(8) var<uniform> lightSource: LightSource;
-@group(0) @binding(9) var<uniform> uWindowSize: vec2f;
-@group(0) @binding(10) var<uniform> uT: f32;
-@group(0) @binding(11) var<uniform> uCommonBuffer: CommonBufferLayout;
-
-@group(1) @binding(0) var prevFrame: texture_2d<f32>;
-@group(1) @binding(1) var depthBuffer: texture_2d<f32>;
-@group(1) @binding(2) var prevFrameSampler: sampler;
 
 struct ControlData {
 	pressedMouseButtons: vec3u,
@@ -20,27 +12,6 @@ struct ControlData {
 	mouseGridPos: vec2u,
 	_unused: vec2u // Padding to multiples of 16 bytes.
 };
-
-struct LightSource {
-	pos: vec3f,
-	magnitude: f32
-};
-
-struct TestStruct {
-	f0: vec3f,
-	f1: vec3f
-}
-
-struct TestStruct2
-{
-	f1: vec3f,
-	f0: f32
-}
-
-struct CommonBufferLayout {
-	lightSource: TestStruct,
-	data: TestStruct2
-}
 
 struct VertexIn {
 	@location(0) position: vec4f,
