@@ -1,7 +1,8 @@
 import { UI } from "./ui.js";
+import * as MemoryAllocator from "./MemoryAllocator.js";
 import { vec3, mat4, quat } from "./libs/wgpu-matrix.module.js";
 
-const GRID_SIZE = 64;
+const GRID_SIZE = 32;
 const WORK_GROUP_SIZE = 4;
 const MAX_COMPUTE_STEP_DURATION = 16; // Amount of ms to hold one frame of simulation for.
 const TRANSLATION_SPEED = .15;
@@ -39,14 +40,11 @@ class MainModule
 		this._lightSource = {
 			x: 0.35, y: 1.5, z: 0,
 			magnitude: 2,
-			buffer: new Float32Array([0, 0, 1, 1]),
+			_bufferIndex: MemoryAllocator.allocf32(4),
 
 			update()
 			{
-				this.buffer[0] = this.x;
-				this.buffer[1] = this.y;
-				this.buffer[2] = this.z;
-				this.buffer[3] = this.magnitude;
+				MemoryAllocator.writef32(this._bufferIndex, this.x, this.y, this.z, this.magnitude);
 			}
 		};
 
@@ -540,7 +538,7 @@ class MainModule
 	_getCubeVertices(cubeSize = .5)
 	{
 		// Vertices with face normals.
-		const buffer = new Float32Array([
+		const vertices = new Float32Array([
 			// Front face
 			cubeSize, cubeSize, cubeSize, 1,
 			0, 0, 1,
@@ -627,7 +625,7 @@ class MainModule
 		]);
 
 		// Without normals
-		// const buffer = new Float32Array([
+		// const vertices = new Float32Array([
 		// 	0.5, 0.5, 0.5, 1,
 		// 	-0.5, -0.5, 0.5, 1,
 		// 	0.5, -0.5, 0.5, 1,
@@ -657,7 +655,7 @@ class MainModule
 		]);
 
 		return {
-			vertex: buffer,
+			vertex: vertices,
 			index: indices
 		};
 	}
@@ -763,11 +761,11 @@ class MainModule
 			usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST
 		});
 
-		const lightsBuffer = this._device.createBuffer({
-			label: "lights buffer",
-			size: this._lightSource.buffer.byteLength,
-			usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST
-		});
+		// const lightsBuffer = this._device.createBuffer({
+		// 	label: "lights buffer",
+		// 	size: this._lightSource.buffer.byteLength,
+		// 	usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST
+		// });
 
 		const uWindowSizeBuffer = this._device.createBuffer(
 		{
@@ -783,8 +781,8 @@ class MainModule
 		});
 
 		const commonBuffer = this._device.createBuffer({
-			label: "common buffer",
-			size: this._commonBuffer.byteLength,
+			label: "common buffer f32",
+			size: MemoryAllocator.bufferf32.byteLength,
 			usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST
 		});
 
@@ -793,20 +791,20 @@ class MainModule
 		const height = window.innerHeight * pixelRatio | 0;
 
 		// TODO: debug
-		this._commonBuffer[0] = 1;
-		this._commonBuffer[1] = 0;
-		this._commonBuffer[2] = 0;
+		// this._commonBuffer[0] = 1;
+		// this._commonBuffer[1] = 0;
+		// this._commonBuffer[2] = 0;
 
-		// This is actually gives green, due to alignment of 16 for vec3f in wgsl.
-		this._commonBuffer[3] = 0;
-		this._commonBuffer[4] = 0;
-		this._commonBuffer[5] = 1;
+		// // This is actually gives green, due to alignment of 16 for vec3f in wgsl.
+		// this._commonBuffer[3] = 0;
+		// this._commonBuffer[4] = 0;
+		// this._commonBuffer[5] = 1;
 
-		this._commonBuffer[8] = 0;
-		this._commonBuffer[9] = 1;
-		this._commonBuffer[10] = 1;
+		// this._commonBuffer[8] = 0;
+		// this._commonBuffer[9] = 1;
+		// this._commonBuffer[10] = 1;
 
-		this._commonBuffer[11] = 1;
+		// this._commonBuffer[11] = 1;
 
 		this._device.queue.writeBuffer(gridDimensionsBuffer, 0, gridDimensionsData);
 		this._device.queue.writeBuffer(controlDataBuffer, 0, this._controlData);
@@ -814,17 +812,17 @@ class MainModule
 		this._device.queue.writeBuffer(projViewMatrixBuffer, 0, this._projViewMatInv);
 		this._device.queue.writeBuffer(prevViewMatrixBuffer, 0, this._prevViewMat);
 		this._device.queue.writeBuffer(prevProjViewMatrixBuffer, 0, this._prevProjViewMatInv);
-		this._device.queue.writeBuffer(lightsBuffer, 0, this._lightSource.buffer);
+		// this._device.queue.writeBuffer(lightsBuffer, 0, this._lightSource.buffer);
 		this._device.queue.writeBuffer(uWindowSizeBuffer, 0, new Float32Array([width, height]));
 		this._device.queue.writeBuffer(uTBuffer, 0, this._timeBuffer.buffer);
-		this._device.queue.writeBuffer(commonBuffer, 0, this._commonBuffer.buffer);
+		this._device.queue.writeBuffer(commonBuffer, 0, MemoryAllocator.bufferf32.buffer);
 
 		this._uniformBuffers = {
 			gridDimensionsBuffer,
 			controlDataBuffer,
 			viewMatrixBuffer,
 			projViewMatrixBuffer,
-			lightsBuffer,
+			// lightsBuffer,
 			uWindowSizeBuffer,
 			uTBuffer,
 			prevViewMatrixBuffer,
@@ -1129,11 +1127,11 @@ class MainModule
 					visibility: GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT,
 					buffer: { type: "uniform" }
 				},
-				{
-					binding: 8,
-					visibility: GPUShaderStage.FRAGMENT,
-					buffer: { type: "uniform" }
-				},
+				// {
+				// 	binding: 8,
+				// 	visibility: GPUShaderStage.FRAGMENT,
+				// 	buffer: { type: "uniform" }
+				// },
 				{
 					binding: 9,
 					visibility: GPUShaderStage.FRAGMENT,
@@ -1190,10 +1188,10 @@ class MainModule
 					binding: 7,
 					resource: { buffer: uniformBuffers.prevProjViewMatrixBuffer }
 				},
-				{
-					binding: 8,
-					resource: { buffer: uniformBuffers.lightsBuffer }
-				},
+				// {
+				// 	binding: 8,
+				// 	resource: { buffer: uniformBuffers.lightsBuffer }
+				// },
 				{
 					binding: 9,
 					resource: { buffer: uniformBuffers.uWindowSizeBuffer }
@@ -1246,10 +1244,10 @@ class MainModule
 					binding: 7,
 					resource: { buffer: uniformBuffers.prevProjViewMatrixBuffer }
 				},
-				{
-					binding: 8,
-					resource: { buffer: uniformBuffers.lightsBuffer }
-				},
+				// {
+				// 	binding: 8,
+				// 	resource: { buffer: uniformBuffers.lightsBuffer }
+				// },
 				{
 					binding: 9,
 					resource: { buffer: uniformBuffers.uWindowSizeBuffer }
@@ -1276,7 +1274,6 @@ class MainModule
 					clearValue: clearColor,
 					loadOp: "clear",
 					storeOp: "store",
-					// view: this._ctx.getCurrentTexture().createView(),
 					view: undefined,
 					resolveTarget: undefined
 				},
@@ -1308,8 +1305,9 @@ class MainModule
 		this._device.queue.writeBuffer(this._uniformBuffers.projViewMatrixBuffer, 0, this._projViewMatInv);
 		this._device.queue.writeBuffer(this._uniformBuffers.prevViewMatrixBuffer, 0, this._prevViewMat);
 		this._device.queue.writeBuffer(this._uniformBuffers.prevProjViewMatrixBuffer, 0, this._prevProjViewMatInv);
-		this._device.queue.writeBuffer(this._uniformBuffers.lightsBuffer, 0, this._lightSource.buffer);
+		// this._device.queue.writeBuffer(this._uniformBuffers.lightsBuffer, 0, this._lightSource.buffer);
 		this._device.queue.writeBuffer(this._uniformBuffers.uTBuffer, 0, this._timeBuffer.buffer);
+		this._device.queue.writeBuffer(this._uniformBuffers.commonBuffer, 0, MemoryAllocator.bufferf32.buffer);
 	}
 
 	_updateLights(dt)

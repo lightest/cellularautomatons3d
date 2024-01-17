@@ -4,7 +4,7 @@
 @group(0) @binding(5) var<uniform> uProjViewMatInv: mat4x4f;
 @group(0) @binding(6) var<uniform> uPrevViewMat: mat4x4f;
 @group(0) @binding(7) var<uniform> uPrevProjViewMatInv: mat4x4f;
-@group(0) @binding(8) var<uniform> lightSource: LightSource;
+// @group(0) @binding(8) var<uniform> lightSource: LightSource;
 @group(0) @binding(9) var<uniform> uWindowSize: vec2f;
 @group(0) @binding(10) var<uniform> uT: f32;
 @group(0) @binding(11) var<uniform> uCommonBuffer: CommonBufferLayout;
@@ -30,7 +30,7 @@ struct TestStruct2
 }
 
 struct CommonBufferLayout {
-	lightSource: TestStruct,
+	lightSource: LightSource,
 	data: TestStruct2
 }
 
@@ -195,6 +195,7 @@ fn calculateLigtingAndOcclusionAt(samplePoint: vec3f, vUv: vec2f) -> vec4f
 	let cellCoords = floor((samplePoint + HALF_CUBE_SIZE) / cellSize);
 	let cellOrigin = cellCoords * cellSize + cellSize * 0.5f - HALF_CUBE_SIZE;
 	let i = getCellIdx(cellCoords);
+	let lightSource = uCommonBuffer.lightSource;
 
 	// Actual visible cell size might be smaller than the volume cell it is occupying.
 	let actualVisibleCubeSize = cellSize * uCellSize * 0.5f;
@@ -322,6 +323,7 @@ fn calculateLigtingAt(samplePoint: vec3f, cellOrigin: vec3f, initialMaterialColo
 	let faceNormal = getCubeFaceNormal(samplePoint, cellOrigin);
 	let cameraPos = viewMat[3].xyz;
 	let viewDir = normalize(samplePoint - cameraPos);
+	let lightSource = uCommonBuffer.lightSource;
 
 	// TODO: should dependant parameters be passed as arguments?
 	let distanceToLight:f32 = distance(lightSource.pos, samplePoint);
@@ -403,6 +405,7 @@ fn rayMarch(start: vec3f, end: vec3f, vUv: vec2f, steps: f32) -> RayMarchOut
 	var cellOrigin = vec3f(0.0f);
 	var cellColor = vec4f(0.0f);
 	var occlusionFactor: f32 = 1.0f;
+	let lightSource = uCommonBuffer.lightSource;
 
 	while(depth < marchDepth)
 	{
@@ -585,6 +588,7 @@ fn fragment_main(fragData: VertexOut) -> ShaderOut
 	var rayMarchOut: RayMarchOut;
 	var mixedColor = vec4f(0, 0, 0, 1);
 	var mixedDepth = vec4f(0);
+	let lightSource = uCommonBuffer.lightSource;
 
 	let cameraPos = viewMat[3].xyz;
 	// let viewDir = normalize(fragData.worldPosition.xyz - cameraPos);
