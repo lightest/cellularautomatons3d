@@ -1,9 +1,5 @@
 @group(0) @binding(0) var<uniform> uGridSize: vec3f;
 @group(0) @binding(2) var<storage> cellStates: array<u32>;
-@group(0) @binding(4) var<uniform> viewMat: mat4x4f;
-@group(0) @binding(5) var<uniform> uProjViewMatInv: mat4x4f;
-@group(0) @binding(6) var<uniform> uPrevViewMat: mat4x4f;
-@group(0) @binding(7) var<uniform> uPrevProjViewMatInv: mat4x4f;
 // @group(0) @binding(8) var<uniform> lightSource: LightSource;
 @group(0) @binding(9) var<uniform> uWindowSize: vec2f;
 @group(0) @binding(10) var<uniform> uT: f32;
@@ -12,11 +8,6 @@
 @group(1) @binding(0) var prevFrame: texture_2d<f32>;
 @group(1) @binding(1) var depthBuffer: texture_2d<f32>;
 @group(1) @binding(2) var prevFrameSampler: sampler;
-
-struct LightSource {
-	pos: vec3f,
-	magnitude: f32
-};
 
 struct TestStruct {
 	f0: vec3f,
@@ -29,10 +20,18 @@ struct TestStruct2
 	f0: f32
 }
 
+struct LightSource {
+	pos: vec3f,
+	magnitude: f32
+};
+
 struct CommonBufferLayout {
 	lightSource: LightSource,
-	data: TestStruct2
-}
+	viewMat: mat4x4f,
+	projViewMatInv: mat4x4f,
+	prevViewMat: mat4x4f,
+	prevProjViewMatInv: mat4x4f
+};
 
 struct VertexOut {
 	@builtin(position) position: vec4f,
@@ -235,6 +234,8 @@ fn mixWithReprojectedColor(currentSampleColor: vec4f, prevSampleColor: vec4f, sa
 {
 	var temporalAlpha = 0.1f;
 	var prevColor = prevSampleColor;
+	let viewMat = uCommonBuffer.viewMat;
+	let uPrevViewMat = uCommonBuffer.prevViewMat;
 	// temporalAlpha = 1.f;
 
 	// Only apply reprojection within the range of positive uvs.
@@ -262,6 +263,7 @@ fn mixWithReprojectedColor(currentSampleColor: vec4f, prevSampleColor: vec4f, sa
 
 fn getReprojectedUV(samplePos: vec3f) -> vec2f
 {
+	let uPrevProjViewMatInv = uCommonBuffer.prevProjViewMatInv;
 	let sampleProjectedToPrevViewpoint: vec4f = uPrevProjViewMatInv * vec4f(samplePos, 1.0f);
 
 	// Converting to clipspace ranged [-1, 1].
@@ -279,6 +281,10 @@ fn mixWithReprojectedDepth(current: vec2f, prev: vec2f, samplePoint: vec3f, fart
 {
 	var temporalAlpha = 0.1f;
 	var prevDepth = prev.r;
+	let viewMat = uCommonBuffer.viewMat;
+	let uPrevViewMat = uCommonBuffer.prevViewMat;
+	let uProjViewMatInv = uCommonBuffer.projViewMatInv;
+	let uPrevProjViewMatInv = uCommonBuffer.prevProjViewMatInv;
 
 	if (all(samplePoint == farthestMarchPos))
 	{
@@ -320,6 +326,7 @@ fn mixWithReprojectedDepth(current: vec2f, prev: vec2f, samplePoint: vec3f, fart
 
 fn calculateLigtingAt(samplePoint: vec3f, cellOrigin: vec3f, initialMaterialColor: vec4f) -> vec4f
 {
+	let viewMat = uCommonBuffer.viewMat;
 	let faceNormal = getCubeFaceNormal(samplePoint, cellOrigin);
 	let cameraPos = viewMat[3].xyz;
 	let viewDir = normalize(samplePoint - cameraPos);
@@ -529,6 +536,8 @@ fn rayMarchDepth(start: vec3f, end: vec3f, vUv: vec2f, steps: f32) -> RayMarchOu
 
 fn estimateLikelyDepth(samplePoint: vec3f, prevDepth: vec2f, prevDepthReprojected: vec2f, vUv: vec2f) -> vec2f
 {
+	let viewMat = uCommonBuffer.viewMat;
+	let uPrevViewMat = uCommonBuffer.prevViewMat;
 	let cameraPos = viewMat[3].xyz;
 	let prevCameraPos = uPrevViewMat[3].xyz;
 	let currentDepth = length(samplePoint - cameraPos);
@@ -589,6 +598,7 @@ fn fragment_main(fragData: VertexOut) -> ShaderOut
 	var mixedColor = vec4f(0, 0, 0, 1);
 	var mixedDepth = vec4f(0);
 	let lightSource = uCommonBuffer.lightSource;
+	let viewMat = uCommonBuffer.viewMat;
 
 	let cameraPos = viewMat[3].xyz;
 	// let viewDir = normalize(fragData.worldPosition.xyz - cameraPos);

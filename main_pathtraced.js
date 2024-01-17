@@ -48,6 +48,8 @@ class MainModule
 			}
 		};
 
+		this._viewMatricesBufferIndex = -1;
+
 		this._eyeVector = new Float32Array([0, 0, 1]);
 		this._target = new Float32Array(3);
 		this._up = new Float32Array([0, 1, 0]);
@@ -85,6 +87,9 @@ class MainModule
 		this._prevProjViewMatInv = mat4.create();
 		this._updatePerspectiveMatrix();
 		mat4.multiply(this._projectionMat, this._inverseViewMat, this._projViewMatInv);
+
+		// To store 4 4x4 matrices.
+		this._viewMatricesBufferIndex = MemoryAllocator.allocf32(16 * 4);
 
 		this._adapter = await navigator.gpu.requestAdapter({
 			powerPreference: "high-performance"
@@ -208,12 +213,22 @@ class MainModule
 	{
 		mat4.inverse(this._viewMat, this._inverseViewMat);
 		mat4.multiply(this._projectionMat, this._inverseViewMat, this._projViewMatInv);
+
+		// TODO: is there a more elegant way to calc these?
+		const prevViewMatOffset = this._viewMat.length + this._projViewMatInv.length;
+		const prevProjeViewMatInvOffset = this._viewMat.length + this._projViewMatInv.length + this._prevViewMat.length;
+
+		// prevFrame matrices are updated at the end of the frame, after render, but we write them here for immediate availability to GPU.
+		MemoryAllocator.writef32Array(this._viewMatricesBufferIndex, this._viewMat);
+		MemoryAllocator.writef32Array(this._viewMatricesBufferIndex + this._viewMat.length, this._projViewMatInv);
+		MemoryAllocator.writef32Array(this._viewMatricesBufferIndex + prevViewMatOffset, this._prevViewMat);
+		MemoryAllocator.writef32Array(this._viewMatricesBufferIndex + prevProjeViewMatInvOffset, this._prevProjViewMatInv);
 	}
 
 	_updatePrevMatrices()
 	{
 		mat4.copy(this._viewMat, this._prevViewMat);
-		mat4.copy(this._projViewMatInv, this._prevProjViewMatInv)
+		mat4.copy(this._projViewMatInv, this._prevProjViewMatInv);
 	}
 
 	_onPointermove(e)
@@ -511,9 +526,9 @@ class MainModule
 	_getPlaneVertices()
 	{
 		const buffer = new Float32Array([
-			1, 1, 0, 1,
-			0, 0, 1,
-			1, 1,
+			1, 1, 0, 1,	// vertex
+			0, 0, 1,	// normal
+			1, 1,		// uv
 			-1, -1, 0, 1,
 			0, 0, 1,
 			0, 0,
@@ -737,36 +752,6 @@ class MainModule
 			usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST
 		});
 
-		const viewMatrixBuffer = this._device.createBuffer({
-			label: "viewmatrix buffer",
-			size: this._inverseViewMat.byteLength,
-			usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST
-		});
-
-		const projViewMatrixBuffer = this._device.createBuffer({
-			label: "projviewmat buffer",
-			size: this._projViewMatInv.byteLength,
-			usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST
-		});
-
-		const prevViewMatrixBuffer = this._device.createBuffer({
-			label: "prev viewmatrix buffer",
-			size: this._prevViewMat.byteLength,
-			usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST
-		});
-
-		const prevProjViewMatrixBuffer = this._device.createBuffer({
-			label: "prev projviewmat buffer",
-			size: this._prevProjViewMatInv.byteLength,
-			usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST
-		});
-
-		// const lightsBuffer = this._device.createBuffer({
-		// 	label: "lights buffer",
-		// 	size: this._lightSource.buffer.byteLength,
-		// 	usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST
-		// });
-
 		const uWindowSizeBuffer = this._device.createBuffer(
 		{
 			label: "uWindowSize buffer",
@@ -808,11 +793,6 @@ class MainModule
 
 		this._device.queue.writeBuffer(gridDimensionsBuffer, 0, gridDimensionsData);
 		this._device.queue.writeBuffer(controlDataBuffer, 0, this._controlData);
-		this._device.queue.writeBuffer(viewMatrixBuffer, 0, this._viewMat);
-		this._device.queue.writeBuffer(projViewMatrixBuffer, 0, this._projViewMatInv);
-		this._device.queue.writeBuffer(prevViewMatrixBuffer, 0, this._prevViewMat);
-		this._device.queue.writeBuffer(prevProjViewMatrixBuffer, 0, this._prevProjViewMatInv);
-		// this._device.queue.writeBuffer(lightsBuffer, 0, this._lightSource.buffer);
 		this._device.queue.writeBuffer(uWindowSizeBuffer, 0, new Float32Array([width, height]));
 		this._device.queue.writeBuffer(uTBuffer, 0, this._timeBuffer.buffer);
 		this._device.queue.writeBuffer(commonBuffer, 0, MemoryAllocator.bufferf32.buffer);
@@ -820,13 +800,8 @@ class MainModule
 		this._uniformBuffers = {
 			gridDimensionsBuffer,
 			controlDataBuffer,
-			viewMatrixBuffer,
-			projViewMatrixBuffer,
-			// lightsBuffer,
 			uWindowSizeBuffer,
 			uTBuffer,
-			prevViewMatrixBuffer,
-			prevProjViewMatrixBuffer,
 			commonBuffer
 		};
 
@@ -1107,26 +1082,26 @@ class MainModule
 					visibility: GPUShaderStage.COMPUTE,
 					buffer: { type: "storage" }
 				},
-				{
-					binding: 4,
-					visibility: GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT,
-					buffer: { type: "uniform" }
-				},
-				{
-					binding: 5,
-					visibility: GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT,
-					buffer: { type: "uniform" }
-				},
-				{
-					binding: 6,
-					visibility: GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT,
-					buffer: { type: "uniform" }
-				},
-				{
-					binding: 7,
-					visibility: GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT,
-					buffer: { type: "uniform" }
-				},
+				// {
+				// 	binding: 4,
+				// 	visibility: GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT,
+				// 	buffer: { type: "uniform" }
+				// },
+				// {
+				// 	binding: 5,
+				// 	visibility: GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT,
+				// 	buffer: { type: "uniform" }
+				// },
+				// {
+				// 	binding: 6,
+				// 	visibility: GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT,
+				// 	buffer: { type: "uniform" }
+				// },
+				// {
+				// 	binding: 7,
+				// 	visibility: GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT,
+				// 	buffer: { type: "uniform" }
+				// },
 				// {
 				// 	binding: 8,
 				// 	visibility: GPUShaderStage.FRAGMENT,
@@ -1144,7 +1119,7 @@ class MainModule
 				},
 				{
 					binding: 11,
-					visibility: GPUShaderStage.FRAGMENT,
+					visibility: GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT,
 					buffer: { type: "uniform" }
 				}
 			]
@@ -1172,26 +1147,6 @@ class MainModule
 					binding: 3,
 					resource: { buffer: storageBuffers[1] }
 				},
-				{
-					binding: 4,
-					resource: { buffer: uniformBuffers.viewMatrixBuffer }
-				},
-				{
-					binding: 5,
-					resource: { buffer: uniformBuffers.projViewMatrixBuffer }
-				},
-				{
-					binding: 6,
-					resource: { buffer: uniformBuffers.prevViewMatrixBuffer }
-				},
-				{
-					binding: 7,
-					resource: { buffer: uniformBuffers.prevProjViewMatrixBuffer }
-				},
-				// {
-				// 	binding: 8,
-				// 	resource: { buffer: uniformBuffers.lightsBuffer }
-				// },
 				{
 					binding: 9,
 					resource: { buffer: uniformBuffers.uWindowSizeBuffer }
@@ -1228,26 +1183,6 @@ class MainModule
 					binding: 3,
 					resource: { buffer: storageBuffers[0] }
 				},
-				{
-					binding: 4,
-					resource: { buffer: uniformBuffers.viewMatrixBuffer }
-				},
-				{
-					binding: 5,
-					resource: { buffer: uniformBuffers.projViewMatrixBuffer }
-				},
-				{
-					binding: 6,
-					resource: { buffer: uniformBuffers.prevViewMatrixBuffer }
-				},
-				{
-					binding: 7,
-					resource: { buffer: uniformBuffers.prevProjViewMatrixBuffer }
-				},
-				// {
-				// 	binding: 8,
-				// 	resource: { buffer: uniformBuffers.lightsBuffer }
-				// },
 				{
 					binding: 9,
 					resource: { buffer: uniformBuffers.uWindowSizeBuffer }
@@ -1301,11 +1236,6 @@ class MainModule
 	{
 		// console.log(this._controlData)
 		this._device.queue.writeBuffer(this._uniformBuffers.controlDataBuffer, 0, this._controlData);
-		this._device.queue.writeBuffer(this._uniformBuffers.viewMatrixBuffer, 0, this._viewMat);
-		this._device.queue.writeBuffer(this._uniformBuffers.projViewMatrixBuffer, 0, this._projViewMatInv);
-		this._device.queue.writeBuffer(this._uniformBuffers.prevViewMatrixBuffer, 0, this._prevViewMat);
-		this._device.queue.writeBuffer(this._uniformBuffers.prevProjViewMatrixBuffer, 0, this._prevProjViewMatInv);
-		// this._device.queue.writeBuffer(this._uniformBuffers.lightsBuffer, 0, this._lightSource.buffer);
 		this._device.queue.writeBuffer(this._uniformBuffers.uTBuffer, 0, this._timeBuffer.buffer);
 		this._device.queue.writeBuffer(this._uniformBuffers.commonBuffer, 0, MemoryAllocator.bufferf32.buffer);
 	}

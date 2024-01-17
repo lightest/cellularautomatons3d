@@ -6,6 +6,7 @@ let nextIdx = 0;
 export function allocf32(size = 0)
 {
 	// TODO: grow buffer by closest multiples relative to size suitable for WebGPU.
+	// TODO: check size to be a multiple of data type alignment, which follows WebGPU spec.
 
 	if (size <= 0)
 	{
@@ -24,6 +25,7 @@ export function allocf32(size = 0)
 }
 
 // Doesn't work, entities outside won't know their index to buffer is invalid.
+// TODO: Perhaps it needs to track available memory gaps and allocated them is requested size fits.
 // export function freef32(startIndex = 0, size = 0) {
 // 	size = Math.min(size, bufferf32.length - startIdx);
 // 	let i = startIdx;
@@ -39,4 +41,9 @@ export function allocf32(size = 0)
 export function writef32(startIdx = 0, ...args)
 {
 	bufferf32.set(args, startIdx);
+}
+
+export function writef32Array(startIdx = 0, data = [])
+{
+	bufferf32.set(data, startIdx);
 }
