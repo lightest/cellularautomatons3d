@@ -33,8 +33,10 @@ class MainModule
 		this._prevProjViewMatInv = undefined;
 		this._simulationIsActive = 1;
 		this._translationSpeedMul = .2;
+		this._depthSamples = 25;
+		this._shadowSampels = 10;
+
 		this.simulationIsActive = this._simulationIsActive;
-		this._timeBuffer = new Float32Array([0]);
 
 		this._lightSource = {
 			x: 0.35, y: 1.5, z: 0,
@@ -87,11 +89,6 @@ class MainModule
 		this._updatePerspectiveMatrix();
 		mat4.multiply(this._projectionMat, this._inverseViewMat, this._projViewMatInv);
 
-		// To store 4 4x4 matrices.
-		this._viewMatricesBufferIndex = MemoryAllocator.allocf32(16 * 4);
-		this._windowSizeIndex = MemoryAllocator.allocf32(2);
-		this._elapsedTimeIndex = MemoryAllocator.allocf32(1);
-
 		this._adapter = await navigator.gpu.requestAdapter({
 			powerPreference: "high-performance"
 		});
@@ -103,7 +100,6 @@ class MainModule
 		this._canvas = document.querySelector(".main-canvas");
 		this._canvas.width = (window.innerWidth * pixelRatio) | 0;
 		this._canvas.height = (window.innerHeight * pixelRatio) | 0;
-		MemoryAllocator.writef32(this._windowSizeIndex, this._canvas.width, this._canvas.height);
 		this._ctx = this._canvas.getContext("webgpu");
 		this._ctx.configure({
 			device: this._device,
@@ -188,6 +184,8 @@ class MainModule
 		// this._ui.registerHandler("pointerdown", this._onPointerdown.bind(this));
 		// this._ui.registerHandler("pointerup", this._onPointerup.bind(this));
 
+		this._setupUniformsMemoryCPU();
+
 		this._updateLoop();
 	}
 
@@ -200,6 +198,19 @@ class MainModule
 	set fov(angle)
 	{
 		this._fov = angle * Math.PI / 180;
+	}
+
+	_setupUniformsMemoryCPU()
+	{
+		// To store 4 4x4 matrices.
+		this._viewMatricesBufferIndex = MemoryAllocator.allocf32(16 * 4);
+		this._windowSizeIndex = MemoryAllocator.allocf32(2);
+		this._elapsedTimeIndex = MemoryAllocator.allocf32(1);
+		this._depthRaySamplesIndex = MemoryAllocator.allocf32(1);
+		this._shadowRaySamplesIndex = MemoryAllocator.allocf32(1);
+		MemoryAllocator.writef32(this._windowSizeIndex, this._canvas.width, this._canvas.height);
+		MemoryAllocator.writef32(this._depthRaySamplesIndex, this._depthSamples);
+		MemoryAllocator.writef32(this._shadowRaySamplesIndex, this._shadowSampels);
 	}
 
 	_updatePerspectiveMatrix()

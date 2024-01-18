@@ -1,6 +1,6 @@
 @group(0) @binding(0) var<uniform> uGridSize: vec3f;
 @group(0) @binding(2) var<storage> cellStates: array<u32>;
-@group(0) @binding(11) var<uniform> uCommonFrequentBuffer: CommonBufferLayout;
+@group(0) @binding(11) var<uniform> uCommonUniformsBuffer: CommonBufferLayout;
 
 @group(1) @binding(0) var prevFrame: texture_2d<f32>;
 @group(1) @binding(1) var depthBuffer: texture_2d<f32>;
@@ -32,6 +32,8 @@ struct CommonBufferLayout {
 	prevProjViewMatInv: mat4x4f,
 	windowSize: vec2f,
 	elapsedTime: f32,
+	depthSamples: f32,
+	shadowSamples: f32
 };
 
 struct VertexOut {
@@ -84,7 +86,7 @@ fn nrand(n: vec2f) -> f32
 
 fn n1rand(n: vec2f) -> f32
 {
-  return nrand(0.07 * fract(uCommonFrequentBuffer.elapsedTime) + n);
+  return nrand(0.07 * fract(uCommonUniformsBuffer.elapsedTime) + n);
 }
 
 fn sdBox(p: vec3f, b: vec3f) -> f32
@@ -95,7 +97,7 @@ fn sdBox(p: vec3f, b: vec3f) -> f32
 
 fn getRay(uv: vec2f) -> vec4f
 {
-	let uWindowSize = uCommonFrequentBuffer.windowSize;
+	let uWindowSize = uCommonUniformsBuffer.windowSize;
 	let r = uWindowSize.x / uWindowSize.y;
 	var xy: vec2f = uv - 0.5f;
 	xy = vec2f(xy.x * r, xy.y);
@@ -196,7 +198,7 @@ fn calculateLigtingAndOcclusionAt(samplePoint: vec3f, vUv: vec2f) -> vec4f
 	let cellCoords = floor((samplePoint + HALF_CUBE_SIZE) / cellSize);
 	let cellOrigin = cellCoords * cellSize + cellSize * 0.5f - HALF_CUBE_SIZE;
 	let i = getCellIdx(cellCoords);
-	let lightSource = uCommonFrequentBuffer.lightSource;
+	let lightSource = uCommonUniformsBuffer.lightSource;
 
 	// Actual visible cell size might be smaller than the volume cell it is occupying.
 	let actualVisibleCubeSize = cellSize * uCellSize * 0.5f;
@@ -214,16 +216,17 @@ fn calculateLigtingAndOcclusionAt(samplePoint: vec3f, vUv: vec2f) -> vec4f
 	// If sample point is occluded from light source by cube itself.
 	// If light is at the angle larger 90deg with face normal, that face is not hit by direct light at all.
 	let faceNormal = getCubeFaceNormal(samplePoint, cellOrigin);
-	if (dot(faceNormal, lightDir) < 0.0f)
-	{
-		occlusionFactor = OCCLUSION_FACTOR;
-	}
-	else
-	{
-		let volumeIntersect = rayCubeIntersect(samplePoint, lightDir, vec3f(0.0f), vec3f(HALF_CUBE_SIZE));
-		let volumeExit = samplePoint + lightDir * volumeIntersect.y;
-		occlusionFactor = rayMarchShadow(samplePoint, volumeExit, i, rndOffset, 10.0f);
-	}
+	// if (dot(faceNormal, lightDir) < 0.0f)
+	// if (false)
+	// {
+	// 	occlusionFactor = OCCLUSION_FACTOR;
+	// }
+	// else
+	// {
+	// 	let volumeIntersect = rayCubeIntersect(samplePoint, lightDir, vec3f(0.0f), vec3f(HALF_CUBE_SIZE));
+	// 	let volumeExit = samplePoint + lightDir * volumeIntersect.y;
+	// 	occlusionFactor = rayMarchShadow(samplePoint, volumeExit, i, rndOffset, uCommonUniformsBuffer.shadowSamples);
+	// }
 
 	let c = cellCoords / uGridSize;
 	let cellColor = vec4f(c.xy, 1f - c.x, 1f);
@@ -236,8 +239,8 @@ fn mixWithReprojectedColor(currentSampleColor: vec4f, prevSampleColor: vec4f, sa
 {
 	var temporalAlpha = 0.1f;
 	var prevColor = prevSampleColor;
-	let viewMat = uCommonFrequentBuffer.viewMat;
-	let uPrevViewMat = uCommonFrequentBuffer.prevViewMat;
+	let viewMat = uCommonUniformsBuffer.viewMat;
+	let uPrevViewMat = uCommonUniformsBuffer.prevViewMat;
 	// temporalAlpha = 1.f;
 
 	// Only apply reprojection within the range of positive uvs.
@@ -265,7 +268,7 @@ fn mixWithReprojectedColor(currentSampleColor: vec4f, prevSampleColor: vec4f, sa
 
 fn getReprojectedUV(samplePos: vec3f) -> vec2f
 {
-	let uPrevProjViewMatInv = uCommonFrequentBuffer.prevProjViewMatInv;
+	let uPrevProjViewMatInv = uCommonUniformsBuffer.prevProjViewMatInv;
 	let sampleProjectedToPrevViewpoint: vec4f = uPrevProjViewMatInv * vec4f(samplePos, 1.0f);
 
 	// Converting to clipspace ranged [-1, 1].
@@ -283,10 +286,10 @@ fn mixWithReprojectedDepth(current: vec2f, prev: vec2f, samplePoint: vec3f, fart
 {
 	var temporalAlpha = 0.1f;
 	var prevDepth = prev.r;
-	let viewMat = uCommonFrequentBuffer.viewMat;
-	let uPrevViewMat = uCommonFrequentBuffer.prevViewMat;
-	let uProjViewMatInv = uCommonFrequentBuffer.projViewMatInv;
-	let uPrevProjViewMatInv = uCommonFrequentBuffer.prevProjViewMatInv;
+	let viewMat = uCommonUniformsBuffer.viewMat;
+	let uPrevViewMat = uCommonUniformsBuffer.prevViewMat;
+	let uProjViewMatInv = uCommonUniformsBuffer.projViewMatInv;
+	let uPrevProjViewMatInv = uCommonUniformsBuffer.prevProjViewMatInv;
 
 	if (all(samplePoint == farthestMarchPos))
 	{
@@ -328,11 +331,11 @@ fn mixWithReprojectedDepth(current: vec2f, prev: vec2f, samplePoint: vec3f, fart
 
 fn calculateLigtingAt(samplePoint: vec3f, cellOrigin: vec3f, initialMaterialColor: vec4f) -> vec4f
 {
-	let viewMat = uCommonFrequentBuffer.viewMat;
+	let viewMat = uCommonUniformsBuffer.viewMat;
 	let faceNormal = getCubeFaceNormal(samplePoint, cellOrigin);
 	let cameraPos = viewMat[3].xyz;
 	let viewDir = normalize(samplePoint - cameraPos);
-	let lightSource = uCommonFrequentBuffer.lightSource;
+	let lightSource = uCommonUniformsBuffer.lightSource;
 
 	// TODO: should dependant parameters be passed as arguments?
 	let distanceToLight:f32 = distance(lightSource.pos, samplePoint);
@@ -414,7 +417,7 @@ fn rayMarch(start: vec3f, end: vec3f, vUv: vec2f, steps: f32) -> RayMarchOut
 	var cellOrigin = vec3f(0.0f);
 	var cellColor = vec4f(0.0f);
 	var occlusionFactor: f32 = 1.0f;
-	let lightSource = uCommonFrequentBuffer.lightSource;
+	let lightSource = uCommonUniformsBuffer.lightSource;
 
 	while(depth < marchDepth)
 	{
@@ -536,10 +539,10 @@ fn rayMarchDepth(start: vec3f, end: vec3f, vUv: vec2f, steps: f32) -> RayMarchOu
 	return out;
 }
 
-fn estimateLikelyDepth(samplePoint: vec3f, prevDepth: vec2f, prevDepthReprojected: vec2f, vUv: vec2f) -> vec2f
+fn estimateLikelyDepth(samplePoint: vec3f, prevDepth: vec2f, prevDepthReprojected: vec2f, vUv: vec2f, uvReprojected: vec2f) -> vec2f
 {
-	let viewMat = uCommonFrequentBuffer.viewMat;
-	let uPrevViewMat = uCommonFrequentBuffer.prevViewMat;
+	let viewMat = uCommonUniformsBuffer.viewMat;
+	let uPrevViewMat = uCommonUniformsBuffer.prevViewMat;
 	let cameraPos = viewMat[3].xyz;
 	let prevCameraPos = uPrevViewMat[3].xyz;
 	let currentDepth = length(samplePoint - cameraPos);
@@ -599,9 +602,9 @@ fn fragment_main(fragData: VertexOut) -> ShaderOut
 	var rayMarchOut: RayMarchOut;
 	var mixedColor = vec4f(0, 0, 0, 1);
 	var mixedDepth = vec4f(0);
-	let lightSource = uCommonFrequentBuffer.lightSource;
-	let viewMat = uCommonFrequentBuffer.viewMat;
-	let uWindowSize = uCommonFrequentBuffer.windowSize;
+	let lightSource = uCommonUniformsBuffer.lightSource;
+	let viewMat = uCommonUniformsBuffer.viewMat;
+	let uWindowSize = uCommonUniformsBuffer.windowSize;
 
 	let cameraPos = viewMat[3].xyz;
 	// let viewDir = normalize(fragData.worldPosition.xyz - cameraPos);
@@ -626,17 +629,20 @@ fn fragment_main(fragData: VertexOut) -> ShaderOut
 		}
 
 		// rayMarchOut = rayMarch(cubeEnterPoint, cubeExitPoint, fragData.vUv, 25.0f);
-		rayMarchOut = rayMarchDepth(cubeEnterPoint, cubeExitPoint, fragData.vUv, 25.0f);
+		rayMarchOut = rayMarchDepth(cubeEnterPoint, cubeExitPoint, fragData.vUv, uCommonUniformsBuffer.depthSamples);
 		out = rayMarchOut.color;
 		let uv = vec2f(fragData.vUv.x, 1.0 - fragData.vUv.y);
-		let uvReprojected = getReprojectedUV(rayMarchOut.finalSamplePoint);
-		let prevColor = textureLoad(prevFrame, vec2i(uvReprojected * uWindowSize), 0);
+		var uvReprojected = getReprojectedUV(rayMarchOut.finalSamplePoint);
 		// var currentDepth = vec2f(length(cameraPos - rayMarchOut.finalSamplePoint), 0.0f);
 		let prevDepth = textureLoad(depthBuffer, vec2i(uv * uWindowSize), 0).xy;
 		let prevDepthReprojected = textureLoad(depthBuffer, vec2i(uvReprojected * uWindowSize), 0).xy;
-		let currentDepth = estimateLikelyDepth(rayMarchOut.finalSamplePoint, prevDepth, prevDepthReprojected, fragData.vUv);
+		let currentDepth = estimateLikelyDepth(rayMarchOut.finalSamplePoint, prevDepth, prevDepthReprojected, fragData.vUv, uvReprojected);
 
 		mixedDepth = vec4f(currentDepth, 0, 1);
+		let moreAccurateSamplePoint = cameraPos + viewRay * mixedDepth.r;
+
+		// Update reprojected uv since by now we have more accurate depth for geometry.
+		uvReprojected = getReprojectedUV(moreAccurateSamplePoint);
 
 		// mixedDepth = mixWithReprojectedDepth(
 		// 	currentDepth,
@@ -648,10 +654,11 @@ fn fragment_main(fragData: VertexOut) -> ShaderOut
 
 		// mixedDepth.r = currentDepth.r;
 
-		out = calculateLigtingAndOcclusionAt(cameraPos + viewRay * mixedDepth.r, fragData.vUv);
+		out = calculateLigtingAndOcclusionAt(moreAccurateSamplePoint, fragData.vUv);
 
-		mixedColor = mixWithReprojectedColor(out, prevColor, rayMarchOut.finalSamplePoint, rayMarchOut.farthestMarchPoint, uvReprojected);
-		out = mixedColor;
+		// let prevColor = textureLoad(prevFrame, vec2i(uvReprojected * uWindowSize), 0);
+		// mixedColor = mixWithReprojectedColor(out, prevColor, moreAccurateSamplePoint, rayMarchOut.farthestMarchPoint, uvReprojected);
+		// out = mixedColor;
 		s = prevDepthReprojected.r;
 		// out = vec4f(1.0f, 0.0f, 0.0f, 1.0f);
 	}
@@ -667,8 +674,8 @@ fn fragment_main(fragData: VertexOut) -> ShaderOut
 	}
 
 	// Common buffer allignment tests.
-	// out = vec4f(uCommonFrequentBuffer.data.f1, 1.0f);
-	// out = vec4f(vec3f(uCommonFrequentBuffer.data.f0, 0, 0), 1.0f);
+	// out = vec4f(uCommonUniformsBuffer.data.f1, 1.0f);
+	// out = vec4f(vec3f(uCommonUniformsBuffer.data.f0, 0, 0), 1.0f);
 
 
 	if (fragData.vUv.x < 0.5f && fragData.vUv.y < 0.5f)
