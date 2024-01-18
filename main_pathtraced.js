@@ -35,7 +35,6 @@ class MainModule
 		this._translationSpeedMul = .2;
 		this.simulationIsActive = this._simulationIsActive;
 		this._timeBuffer = new Float32Array([0]);
-		this._commonBuffer = new Float32Array(128);
 
 		this._lightSource = {
 			x: 0.35, y: 1.5, z: 0,
@@ -90,6 +89,8 @@ class MainModule
 
 		// To store 4 4x4 matrices.
 		this._viewMatricesBufferIndex = MemoryAllocator.allocf32(16 * 4);
+		this._windowSizeIndex = MemoryAllocator.allocf32(2);
+		this._elapsedTimeIndex = MemoryAllocator.allocf32(1);
 
 		this._adapter = await navigator.gpu.requestAdapter({
 			powerPreference: "high-performance"
@@ -102,6 +103,7 @@ class MainModule
 		this._canvas = document.querySelector(".main-canvas");
 		this._canvas.width = (window.innerWidth * pixelRatio) | 0;
 		this._canvas.height = (window.innerHeight * pixelRatio) | 0;
+		MemoryAllocator.writef32(this._windowSizeIndex, this._canvas.width, this._canvas.height);
 		this._ctx = this._canvas.getContext("webgpu");
 		this._ctx.configure({
 			device: this._device,
@@ -354,7 +356,7 @@ class MainModule
 			this._canvas.height = height;
 		}
 
-		this._device.queue.writeBuffer(this._uniformBuffers.uWindowSizeBuffer, 0, new Float32Array([width, height]));
+		MemoryAllocator.writef32(this._windowSizeIndex, width, height);
 
 		this._createResolutionDependentAssests();
 		this._reapplyResolutionDependantAssests();
@@ -752,28 +754,11 @@ class MainModule
 			usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST
 		});
 
-		const uWindowSizeBuffer = this._device.createBuffer(
-		{
-			label: "uWindowSize buffer",
-			size: 8,
-			usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST
-		});
-
-		const uTBuffer = this._device.createBuffer({
-			label: "uTime buffer",
-			size: 4,
-			usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST
-		});
-
-		const commonBuffer = this._device.createBuffer({
+		const commonFrequentBuffer = this._device.createBuffer({
 			label: "common buffer f32",
 			size: MemoryAllocator.bufferf32.byteLength,
 			usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST
 		});
-
-		const pixelRatio = window.devicePixelRatio || 1.0;
-		const width = window.innerWidth * pixelRatio | 0;
-		const height = window.innerHeight * pixelRatio | 0;
 
 		// TODO: debug
 		// this._commonBuffer[0] = 1;
@@ -793,16 +778,12 @@ class MainModule
 
 		this._device.queue.writeBuffer(gridDimensionsBuffer, 0, gridDimensionsData);
 		this._device.queue.writeBuffer(controlDataBuffer, 0, this._controlData);
-		this._device.queue.writeBuffer(uWindowSizeBuffer, 0, new Float32Array([width, height]));
-		this._device.queue.writeBuffer(uTBuffer, 0, this._timeBuffer.buffer);
-		this._device.queue.writeBuffer(commonBuffer, 0, MemoryAllocator.bufferf32.buffer);
+		this._device.queue.writeBuffer(commonFrequentBuffer, 0, MemoryAllocator.bufferf32.buffer);
 
 		this._uniformBuffers = {
 			gridDimensionsBuffer,
 			controlDataBuffer,
-			uWindowSizeBuffer,
-			uTBuffer,
-			commonBuffer
+			commonFrequentBuffer
 		};
 
 		return this._uniformBuffers;
@@ -1082,41 +1063,6 @@ class MainModule
 					visibility: GPUShaderStage.COMPUTE,
 					buffer: { type: "storage" }
 				},
-				// {
-				// 	binding: 4,
-				// 	visibility: GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT,
-				// 	buffer: { type: "uniform" }
-				// },
-				// {
-				// 	binding: 5,
-				// 	visibility: GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT,
-				// 	buffer: { type: "uniform" }
-				// },
-				// {
-				// 	binding: 6,
-				// 	visibility: GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT,
-				// 	buffer: { type: "uniform" }
-				// },
-				// {
-				// 	binding: 7,
-				// 	visibility: GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT,
-				// 	buffer: { type: "uniform" }
-				// },
-				// {
-				// 	binding: 8,
-				// 	visibility: GPUShaderStage.FRAGMENT,
-				// 	buffer: { type: "uniform" }
-				// },
-				{
-					binding: 9,
-					visibility: GPUShaderStage.FRAGMENT,
-					buffer: { type: "uniform" }
-				},
-				{
-					binding: 10,
-					visibility: GPUShaderStage.FRAGMENT,
-					buffer: { type: "uniform" }
-				},
 				{
 					binding: 11,
 					visibility: GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT,
@@ -1148,16 +1094,8 @@ class MainModule
 					resource: { buffer: storageBuffers[1] }
 				},
 				{
-					binding: 9,
-					resource: { buffer: uniformBuffers.uWindowSizeBuffer }
-				},
-				{
-					binding: 10,
-					resource: { buffer: uniformBuffers.uTBuffer }
-				},
-				{
 					binding: 11,
-					resource: { buffer: uniformBuffers.commonBuffer }
+					resource: { buffer: uniformBuffers.commonFrequentBuffer }
 				}
 			]
 		});
@@ -1184,16 +1122,8 @@ class MainModule
 					resource: { buffer: storageBuffers[0] }
 				},
 				{
-					binding: 9,
-					resource: { buffer: uniformBuffers.uWindowSizeBuffer }
-				},
-				{
-					binding: 10,
-					resource: { buffer: uniformBuffers.uTBuffer }
-				},
-				{
 					binding: 11,
-					resource: { buffer: uniformBuffers.commonBuffer }
+					resource: { buffer: uniformBuffers.commonFrequentBuffer }
 				}
 			]
 		});
@@ -1236,8 +1166,7 @@ class MainModule
 	{
 		// console.log(this._controlData)
 		this._device.queue.writeBuffer(this._uniformBuffers.controlDataBuffer, 0, this._controlData);
-		this._device.queue.writeBuffer(this._uniformBuffers.uTBuffer, 0, this._timeBuffer.buffer);
-		this._device.queue.writeBuffer(this._uniformBuffers.commonBuffer, 0, MemoryAllocator.bufferf32.buffer);
+		this._device.queue.writeBuffer(this._uniformBuffers.commonFrequentBuffer, 0, MemoryAllocator.bufferf32.buffer);
 	}
 
 	_updateLights(dt)
@@ -1302,7 +1231,7 @@ class MainModule
 		requestAnimationFrame(this._updateLoopBinded);
 		const dt = performance.now() - this._prevTime;
 		this._frameDuration += dt;
-		this._timeBuffer[0] = performance.now() * .0001;
+		MemoryAllocator.writef32(this._elapsedTimeIndex, performance.now() * .0001);
 		this._applyKeyboardInput();
 		this._updateLights(dt);
 		this._updateMatrices();
