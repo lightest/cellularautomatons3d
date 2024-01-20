@@ -205,6 +205,7 @@ fn calculateLigtingAndOcclusionAt(samplePoint: vec3f, vUv: vec2f) -> vec4f
 	let distToActualCell = sdBox(samplePoint - cellOrigin, vec3f(actualVisibleCubeSize));
 
 	// TODO: other ideas?
+	// This also allows to see bounding volume.
 	if (cellStates[i] != 1 || distToActualCell > 0.001f)
 	{
 		return out;
@@ -579,8 +580,7 @@ fn estimateLikelyDepth(samplePoint: vec3f, prevDepth: vec2f, prevDepthReprojecte
 			likelyDepth.r = intersecData.x;
 		}
 	}
-
-	// if (cellStates[prevCell.idx] == 1 && curCell.idx != prevCell.idx && prevDepthRe < currentDepth)
+	// else if (cellStates[prevCell.idx] == 1 && curCell.idx != prevCell.idx && prevDepth.r < currentDepth)
 	// {
 	// 	let intersecData = rayCubeIntersect(cameraPos, viewRay, prevCell.cellOrigin, actualVisibleCubeSize);
 	// 	if (intersecData.x <= intersecData.y && intersecData.x >= 0)

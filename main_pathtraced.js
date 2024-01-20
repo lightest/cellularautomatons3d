@@ -1,10 +1,9 @@
 import { UI } from "./ui.js";
-import * as MemoryAllocator from "./MemoryAllocator.js";
+import * as MemoryManager from "./MemoryManager.js";
 import { vec3, mat4, quat } from "./libs/wgpu-matrix.module.js";
 
 const GRID_SIZE = 32;
 const WORK_GROUP_SIZE = 4;
-const MAX_COMPUTE_STEP_DURATION = 16; // Amount of ms to hold one frame of simulation for.
 const TRANSLATION_SPEED = .15;
 const MIN_TRANSLATION_SPEED_MUL = .01;
 const MAX_TRANSLATION_SPEED_MUL = 100;
@@ -35,21 +34,20 @@ class MainModule
 		this._translationSpeedMul = .2;
 		this._depthSamples = 25;
 		this._shadowSampels = 10;
+		this._computeStepDurationMS = 16; // Amount of ms to hold one frame of simulation for.
 
 		this.simulationIsActive = this._simulationIsActive;
 
 		this._lightSource = {
 			x: 0.35, y: 1.5, z: 0,
 			magnitude: 2,
-			_bufferIndex: MemoryAllocator.allocf32(4),
+			_bufferIndex: MemoryManager.allocf32(4),
 
 			update()
 			{
-				MemoryAllocator.writef32(this._bufferIndex, this.x, this.y, this.z, this.magnitude);
+				MemoryManager.writef32(this._bufferIndex, this.x, this.y, this.z, this.magnitude);
 			}
 		};
-
-		this._viewMatricesBufferIndex = -1;
 
 		this._eyeVector = new Float32Array([0, 0, 1]);
 		this._target = new Float32Array(3);
@@ -203,14 +201,14 @@ class MainModule
 	_setupUniformsMemoryCPU()
 	{
 		// To store 4 4x4 matrices.
-		this._viewMatricesBufferIndex = MemoryAllocator.allocf32(16 * 4);
-		this._windowSizeIndex = MemoryAllocator.allocf32(2);
-		this._elapsedTimeIndex = MemoryAllocator.allocf32(1);
-		this._depthRaySamplesIndex = MemoryAllocator.allocf32(1);
-		this._shadowRaySamplesIndex = MemoryAllocator.allocf32(1);
-		MemoryAllocator.writef32(this._windowSizeIndex, this._canvas.width, this._canvas.height);
-		MemoryAllocator.writef32(this._depthRaySamplesIndex, this._depthSamples);
-		MemoryAllocator.writef32(this._shadowRaySamplesIndex, this._shadowSampels);
+		this._viewMatricesBufferIndex = MemoryManager.allocf32(16 * 4);
+		this._windowSizeIndex = MemoryManager.allocf32(2);
+		this._elapsedTimeIndex = MemoryManager.allocf32(1);
+		this._depthRaySamplesIndex = MemoryManager.allocf32(1);
+		this._shadowRaySamplesIndex = MemoryManager.allocf32(1);
+		MemoryManager.writef32(this._windowSizeIndex, this._canvas.width, this._canvas.height);
+		MemoryManager.writef32(this._depthRaySamplesIndex, this._depthSamples);
+		MemoryManager.writef32(this._shadowRaySamplesIndex, this._shadowSampels);
 	}
 
 	_updatePerspectiveMatrix()
@@ -232,10 +230,10 @@ class MainModule
 		const prevProjeViewMatInvOffset = this._viewMat.length + this._projViewMatInv.length + this._prevViewMat.length;
 
 		// prevFrame matrices are updated at the end of the frame, after render, but we write them here for immediate availability to GPU.
-		MemoryAllocator.writef32Array(this._viewMatricesBufferIndex, this._viewMat);
-		MemoryAllocator.writef32Array(this._viewMatricesBufferIndex + this._viewMat.length, this._projViewMatInv);
-		MemoryAllocator.writef32Array(this._viewMatricesBufferIndex + prevViewMatOffset, this._prevViewMat);
-		MemoryAllocator.writef32Array(this._viewMatricesBufferIndex + prevProjeViewMatInvOffset, this._prevProjViewMatInv);
+		MemoryManager.writef32Array(this._viewMatricesBufferIndex, this._viewMat);
+		MemoryManager.writef32Array(this._viewMatricesBufferIndex + this._viewMat.length, this._projViewMatInv);
+		MemoryManager.writef32Array(this._viewMatricesBufferIndex + prevViewMatOffset, this._prevViewMat);
+		MemoryManager.writef32Array(this._viewMatricesBufferIndex + prevProjeViewMatInvOffset, this._prevProjViewMatInv);
 	}
 
 	_updatePrevMatrices()
@@ -367,7 +365,7 @@ class MainModule
 			this._canvas.height = height;
 		}
 
-		MemoryAllocator.writef32(this._windowSizeIndex, width, height);
+		MemoryManager.writef32(this._windowSizeIndex, width, height);
 
 		this._createResolutionDependentAssests();
 		this._reapplyResolutionDependantAssests();
@@ -767,29 +765,13 @@ class MainModule
 
 		const commonFrequentBuffer = this._device.createBuffer({
 			label: "common buffer f32",
-			size: MemoryAllocator.bufferf32.byteLength,
+			size: MemoryManager.bufferf32.byteLength,
 			usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST
 		});
 
-		// TODO: debug
-		// this._commonBuffer[0] = 1;
-		// this._commonBuffer[1] = 0;
-		// this._commonBuffer[2] = 0;
-
-		// // This is actually gives green, due to alignment of 16 for vec3f in wgsl.
-		// this._commonBuffer[3] = 0;
-		// this._commonBuffer[4] = 0;
-		// this._commonBuffer[5] = 1;
-
-		// this._commonBuffer[8] = 0;
-		// this._commonBuffer[9] = 1;
-		// this._commonBuffer[10] = 1;
-
-		// this._commonBuffer[11] = 1;
-
 		this._device.queue.writeBuffer(gridDimensionsBuffer, 0, gridDimensionsData);
 		this._device.queue.writeBuffer(controlDataBuffer, 0, this._controlData);
-		this._device.queue.writeBuffer(commonFrequentBuffer, 0, MemoryAllocator.bufferf32.buffer);
+		this._device.queue.writeBuffer(commonFrequentBuffer, 0, MemoryManager.bufferf32.buffer);
 
 		this._uniformBuffers = {
 			gridDimensionsBuffer,
@@ -802,14 +784,7 @@ class MainModule
 
 	_setupStorageBuffers ()
 	{
-		let i = 0;
 		const cellStateData = new Uint32Array(GRID_SIZE * GRID_SIZE * GRID_SIZE);
-
-		this._stagingBuffer = this._device.createBuffer({
-			label: "staging_buf",
-			size: cellStateData.byteLength,
-			usage: GPUBufferUsage.MAP_READ | GPUBufferUsage.COPY_DST
-		});
 
 		const cellStorageBuffers = [
 			this._device.createBuffer({
@@ -827,11 +802,7 @@ class MainModule
 
 		this._cellStorageBuffers = cellStorageBuffers;
 
-		// for (i = 0; i < cellStateData.length; i += 3)
-		// {
-		// 	cellStateData[i] = Math.round(Math.random() + .1);
-		// }
-
+		// Sets initial state.
 		const center = Math.floor(GRID_SIZE * .5);
 		cellStateData[this._getCellIdx3D(center, center, center)] = 1;
 		console.log(cellStateData);
@@ -839,6 +810,7 @@ class MainModule
 		// Center of the grid;
 		const x = Math.floor(GRID_SIZE * .5);
 		const y = Math.floor(GRID_SIZE * .5);
+
 		// Glider.
 		// cellStateData[this._getCellIdx(x + 1, y)] = 1;
 		// cellStateData[this._getCellIdx(x + 1, y - 1)] = 1;
@@ -846,23 +818,8 @@ class MainModule
 		// cellStateData[this._getCellIdx(x - 1, y - 1)] = 1;
 		// cellStateData[this._getCellIdx(x, y + 1)] = 1;
 
-
-		this._device.queue.writeBuffer(
-			cellStorageBuffers[0],
-			0,
-			cellStateData
-		);
-
-		// for (i = 0; i < cellStateData.length; i++)
-		// {
-		// 	cellStateData[i] = i % 2;
-		// }
-
-		this._device.queue.writeBuffer(
-			cellStorageBuffers[1],
-			0,
-			cellStateData
-		);
+		this._device.queue.writeBuffer(cellStorageBuffers[0], 0, cellStateData);
+		this._device.queue.writeBuffer(cellStorageBuffers[1], 0, cellStateData);
 
 		return cellStorageBuffers;
 	}
@@ -872,18 +829,8 @@ class MainModule
 		const cellStateData = new Uint32Array(GRID_SIZE * GRID_SIZE * GRID_SIZE);
 		const center = Math.floor(GRID_SIZE * .5);
 		cellStateData[this._getCellIdx3D(center, center, center)] = 1;
-
-		this._device.queue.writeBuffer(
-			this._cellStorageBuffers[0],
-			0,
-			cellStateData
-		);
-
-		this._device.queue.writeBuffer(
-			this._cellStorageBuffers[1],
-			0,
-			cellStateData
-		);
+		this._device.queue.writeBuffer(this._cellStorageBuffers[0], 0, cellStateData);
+		this._device.queue.writeBuffer(this._cellStorageBuffers[1], 0, cellStateData);
 	}
 
 	async _setupPipelines()
@@ -1177,7 +1124,7 @@ class MainModule
 	{
 		// console.log(this._controlData)
 		this._device.queue.writeBuffer(this._uniformBuffers.controlDataBuffer, 0, this._controlData);
-		this._device.queue.writeBuffer(this._uniformBuffers.commonFrequentBuffer, 0, MemoryAllocator.bufferf32.buffer);
+		this._device.queue.writeBuffer(this._uniformBuffers.commonFrequentBuffer, 0, MemoryManager.bufferf32.buffer);
 	}
 
 	_updateLights(dt)
@@ -1218,14 +1165,6 @@ class MainModule
 		const workGroupCount = Math.ceil(GRID_SIZE / WORK_GROUP_SIZE);
 		computePassEncoder.dispatchWorkgroups(workGroupCount, workGroupCount, workGroupCount);
 		computePassEncoder.end();
-
-		commandEncoder.copyBufferToBuffer(
-			this._cellStorageBuffers[this._simulationStep % 2],
-			0,
-			this._stagingBuffer,
-			0,
-			this._stagingBuffer.size
-		);
 	}
 
 	_addEventListeners()
@@ -1242,7 +1181,7 @@ class MainModule
 		requestAnimationFrame(this._updateLoopBinded);
 		const dt = performance.now() - this._prevTime;
 		this._frameDuration += dt;
-		MemoryAllocator.writef32(this._elapsedTimeIndex, performance.now() * .0001);
+		MemoryManager.writef32(this._elapsedTimeIndex, performance.now() * .0001);
 		this._applyKeyboardInput();
 		this._updateLights(dt);
 		this._updateMatrices();
@@ -1253,7 +1192,7 @@ class MainModule
 		// First render current state.
 		this._renderPass(commandEncoder);
 
-		if (this._frameDuration >= MAX_COMPUTE_STEP_DURATION)
+		if (this._frameDuration >= this._computeStepDurationMS)
 		{
 			// this._applyMouseInput();
 
