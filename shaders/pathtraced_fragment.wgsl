@@ -237,13 +237,21 @@ fn calculateLigtingAndOcclusionAt(samplePoint: vec3f, vUv: vec2f) -> vec4f
 	return out;
 }
 
-fn mixWithReprojectedColor(currentSampleColor: vec4f, prevSampleColor: vec4f, samplePos: vec3f, farthestMarchPos: vec3f, uvReprojected: vec2f) -> vec4f
+fn mixWithReprojectedColor(currentSampleColor: vec4f, prevSampleColor: vec4f, samplePos: vec3f, farthestMarchPos: vec3f, uvReprojected: vec2f, prevDepthReprojected: f32) -> vec4f
 {
 	var temporalAlpha = 0.1f;
 	var prevColor = prevSampleColor;
 	let viewMat = uCommonUniformsBuffer.viewMat;
 	let uPrevViewMat = uCommonUniformsBuffer.prevViewMat;
+	let cameraPos = viewMat[3].xyz;
+	let prevCameraPos = uPrevViewMat[3].xyz;
+	let currentDepth = length(cameraPos - samplePos);
 	// temporalAlpha = 1.f;
+
+	let reprojectedDir = normalize(samplePos - prevCameraPos);
+	let reprojectedSamplePoint = prevCameraPos + reprojectedDir * prevDepthReprojected;
+	let reprojectedCell = getCellFromSamplePoint(reprojectedSamplePoint);
+	let curCell = getCellFromSamplePoint(samplePos);
 
 	// Only apply reprojection within the range of positive uvs.
 	// Clamping does not matter here, since it's the pixels we care about not the values.
@@ -251,17 +259,22 @@ fn mixWithReprojectedColor(currentSampleColor: vec4f, prevSampleColor: vec4f, sa
 	// Applying it there would cause ghosting, rather just leave the current sample as is.
 	if (uvReprojected.x < 0.0f || uvReprojected.x > 1.0f || uvReprojected.y < 0.0f || uvReprojected.y > 1.0f)
 	{
-		prevColor = currentSampleColor;
+		// prevColor = currentSampleColor;
+		return currentSampleColor;
 	}
 
-	if (all(samplePos == farthestMarchPos))
+	if (curCell.idx != reprojectedCell.idx)
 	{
-		let cameraPos = viewMat[3].xyz;
-		let prevCameraPos = uPrevViewMat[3].xyz;
-		let MAX_NO_GHOST_V: f32 = .0025;
-		let v: f32 = clamp(length(cameraPos - prevCameraPos), 0.0f, MAX_NO_GHOST_V) / MAX_NO_GHOST_V;
-		temporalAlpha = mix(temporalAlpha, 1.0f, v);
+		return currentSampleColor;
 	}
+
+	// if (all(samplePos == farthestMarchPos))
+	// {
+	// 	let prevCameraPos = uPrevViewMat[3].xyz;
+	// 	let MAX_NO_GHOST_V: f32 = .0025;
+	// 	let v: f32 = clamp(length(cameraPos - prevCameraPos), 0.0f, MAX_NO_GHOST_V) / MAX_NO_GHOST_V;
+	// 	temporalAlpha = mix(temporalAlpha, 1.0f, v);
+	// }
 
 	var mixedColor = clamp(mix(prevColor, currentSampleColor, temporalAlpha), vec4f(0.0f), vec4f(1.0f));
 
@@ -670,7 +683,7 @@ fn fragment_main(fragData: VertexOut) -> ShaderOut
 		out = calculateLigtingAndOcclusionAt(moreAccurateSamplePoint, fragData.vUv);
 
 		let prevColor = textureLoad(prevFrame, vec2i(uvReprojected * uWindowSize), 0);
-		mixedColor = mixWithReprojectedColor(out, prevColor, moreAccurateSamplePoint, rayMarchOut.farthestMarchPoint, uvReprojected);
+		mixedColor = mixWithReprojectedColor(out, prevColor, moreAccurateSamplePoint, rayMarchOut.farthestMarchPoint, uvReprojected, prevDepthReprojected.r);
 		out = mixedColor;
 		s = prevDepthReprojected.r;
 		// out = vec4f(1.0f, 0.0f, 0.0f, 1.0f);
