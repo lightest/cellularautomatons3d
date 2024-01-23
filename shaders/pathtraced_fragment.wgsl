@@ -33,7 +33,8 @@ struct CommonBufferLayout {
 	windowSize: vec2f,
 	elapsedTime: f32,
 	depthSamples: f32,
-	shadowSamples: f32
+	shadowSamples: f32,
+	cellSize: f32
 };
 
 struct VertexOut {
@@ -76,7 +77,6 @@ struct ShaderOut {
 
 // TODO: replace with uniforms.
 const uCubeOrigin = vec3f(0.0f, 0.0f, 0.0f);
-const uCellSize = 0.85f;
 
 //note: uniformly distributed, normalized rand, [0;1[
 fn nrand(n: vec2f) -> f32
@@ -199,6 +199,7 @@ fn calculateLigtingAndOcclusionAt(samplePoint: vec3f, vUv: vec2f) -> vec4f
 	let cellOrigin = cellCoords * cellSize + cellSize * 0.5f - HALF_CUBE_SIZE;
 	let i = getCellIdx(cellCoords);
 	let lightSource = uCommonUniformsBuffer.lightSource;
+	let uCellSize = uCommonUniformsBuffer.cellSize;
 
 	// Actual visible cell size might be smaller than the volume cell it is occupying.
 	let actualVisibleCubeSize = cellSize * uCellSize * 0.5f;
@@ -218,16 +219,16 @@ fn calculateLigtingAndOcclusionAt(samplePoint: vec3f, vUv: vec2f) -> vec4f
 	// If light is at the angle larger 90deg with face normal, that face is not hit by direct light at all.
 	let faceNormal = getCubeFaceNormal(samplePoint, cellOrigin);
 	// if (dot(faceNormal, lightDir) < 0.0f)
-	// if (false)
-	// {
-	// 	occlusionFactor = OCCLUSION_FACTOR;
-	// }
-	// else
-	// {
-	// 	let volumeIntersect = rayCubeIntersect(samplePoint, lightDir, vec3f(0.0f), vec3f(HALF_CUBE_SIZE));
-	// 	let volumeExit = samplePoint + lightDir * volumeIntersect.y;
-	// 	occlusionFactor = rayMarchShadow(samplePoint, volumeExit, i, rndOffset, uCommonUniformsBuffer.shadowSamples);
-	// }
+	if (false)
+	{
+		occlusionFactor = OCCLUSION_FACTOR;
+	}
+	else
+	{
+		let volumeIntersect = rayCubeIntersect(samplePoint, lightDir, vec3f(0.0f), vec3f(HALF_CUBE_SIZE));
+		let volumeExit = samplePoint + lightDir * volumeIntersect.y;
+		occlusionFactor = rayMarchShadow(samplePoint, volumeExit, i, rndOffset, uCommonUniformsBuffer.shadowSamples);
+	}
 
 	let c = cellCoords / uGridSize;
 	let cellColor = vec4f(c.xy, 1f - c.x, 1f);
@@ -374,6 +375,10 @@ fn rayMarchShadow(start: vec3f, end: vec3f, cellIdx: u32, rndOffset: f32, steps:
 	var cellOrigin = vec3f(0.0f);
 	let cellSize = FULL_CUBE_SIZE / uGridSize;
 	var s = steps;
+	let uCellSize = uCommonUniformsBuffer.cellSize;
+
+	// Actual visible cell size might be smaller than the volume cell it is occupying.
+	let actualVisibleCubeSize = cellSize * uCellSize * 0.5f;
 
 	// while(depth < marchDepth && s >= 0.0f)
 	while(depth < marchDepth)
@@ -388,8 +393,12 @@ fn rayMarchShadow(start: vec3f, end: vec3f, cellIdx: u32, rndOffset: f32, steps:
 		if (i != cellIdx && cellStates[i] == 1)
 		// if (cellStates[i] == 1)
 		{
-			occlusionFactor = OCCLUSION_FACTOR;
-			break;
+			let intersectData = rayCubeIntersect(start, dir, cellOrigin, actualVisibleCubeSize);
+			if (intersectData.x <= intersectData.y && intersectData.x >= 0)
+			{
+				occlusionFactor = OCCLUSION_FACTOR;
+				break;
+			}
 		}
 
 		depth += stepSize;
@@ -411,6 +420,7 @@ fn rayMarch(start: vec3f, end: vec3f, vUv: vec2f, steps: f32) -> RayMarchOut
 	var depth = stepSize * rndOffset + 0.01f;
 	var samplePoint = vec3f(0.0f);
 	let cellSize = FULL_CUBE_SIZE / uGridSize;
+	let uCellSize = uCommonUniformsBuffer.cellSize;
 
 	// Actual visible cell size might be smaller than the volume cell it is occupying.
 	let actualVisibleCubeSize = cellSize * uCellSize * 0.5f;
@@ -494,6 +504,7 @@ fn rayMarchDepth(start: vec3f, end: vec3f, vUv: vec2f, steps: f32) -> RayMarchOu
 	var depth = stepSize * rndOffset + 0.01f;
 	var samplePoint = vec3f(0.0f);
 	let cellSize = FULL_CUBE_SIZE / uGridSize;
+	let uCellSize = uCommonUniformsBuffer.cellSize;
 
 	// Actual visible cell size might be smaller than the volume cell it is occupying.
 	let actualVisibleCubeSize = cellSize * uCellSize * 0.5f;
@@ -554,6 +565,7 @@ fn estimateLikelyDepth(samplePoint: vec3f, prevDepth: vec2f, prevDepthReprojecte
 	let viewRay2 = normalize(samplePoint - prevCameraPos);
 	let prevSamplePoint = prevCameraPos + prevViewRay * prevDepth.r;
 	let reprojectedSamplePoint = prevCameraPos + viewRay2 * prevDepthReprojected.r;
+	let uCellSize = uCommonUniformsBuffer.cellSize;
 
 	// By default taking current sample.
 	var likelyDepth = vec2f(currentDepth, 0.0f);
@@ -574,18 +586,19 @@ fn estimateLikelyDepth(samplePoint: vec3f, prevDepth: vec2f, prevDepthReprojecte
 	// Thus we run cube intersection check for the cell derrived using reprojected depth to get an accurate result.
 	if (cellStates[reprojectedCell.idx] == 1 && curCell.idx != reprojectedCell.idx && prevDepthRe < currentDepth)
 	{
-		let intersecData = rayCubeIntersect(cameraPos, viewRay, reprojectedCell.cellOrigin, actualVisibleCubeSize);
-		if (intersecData.x <= intersecData.y && intersecData.x >= 0)
+		let intersectData = rayCubeIntersect(cameraPos, viewRay, reprojectedCell.cellOrigin, actualVisibleCubeSize);
+		if (intersectData.x <= intersectData.y && intersectData.x >= 0)
 		{
-			likelyDepth.r = intersecData.x;
+			likelyDepth.r = intersectData.x;
 		}
 	}
+
 	// else if (cellStates[prevCell.idx] == 1 && curCell.idx != prevCell.idx && prevDepth.r < currentDepth)
 	// {
-	// 	let intersecData = rayCubeIntersect(cameraPos, viewRay, prevCell.cellOrigin, actualVisibleCubeSize);
-	// 	if (intersecData.x <= intersecData.y && intersecData.x >= 0)
+	// 	let intersectData = rayCubeIntersect(cameraPos, viewRay, prevCell.cellOrigin, actualVisibleCubeSize);
+	// 	if (intersectData.x <= intersectData.y && intersectData.x >= 0)
 	// 	{
-	// 		likelyDepth.r = intersecData.x;
+	// 		likelyDepth.r = intersectData.x;
 	// 	}
 	// }
 
@@ -656,9 +669,9 @@ fn fragment_main(fragData: VertexOut) -> ShaderOut
 
 		out = calculateLigtingAndOcclusionAt(moreAccurateSamplePoint, fragData.vUv);
 
-		// let prevColor = textureLoad(prevFrame, vec2i(uvReprojected * uWindowSize), 0);
-		// mixedColor = mixWithReprojectedColor(out, prevColor, moreAccurateSamplePoint, rayMarchOut.farthestMarchPoint, uvReprojected);
-		// out = mixedColor;
+		let prevColor = textureLoad(prevFrame, vec2i(uvReprojected * uWindowSize), 0);
+		mixedColor = mixWithReprojectedColor(out, prevColor, moreAccurateSamplePoint, rayMarchOut.farthestMarchPoint, uvReprojected);
+		out = mixedColor;
 		s = prevDepthReprojected.r;
 		// out = vec4f(1.0f, 0.0f, 0.0f, 1.0f);
 	}

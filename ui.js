@@ -90,7 +90,6 @@ export class UI
 	init()
 	{
 		// this.selectionArea.init();
-		// this._addEventListeners();
 	}
 
 	setFields(fields)
@@ -120,15 +119,24 @@ export class UI
 
 	_buildUIHTML(fields)
 	{
+		const addedFieldsByNameMap = {};
+
 		let fieldsHTML = "";
 
 		for (let i = 0; i < fields.length; i++)
 		{
 			const fieldDesc = fields[i];
 
+			if (addedFieldsByNameMap[fieldDesc.name] !== undefined)
+			{
+				console.warn(`Field with name "fieldDesc.name" already added, skipping.`);
+				continue;
+			}
+
 			if (htmlByType[fieldDesc.type])
 			{
 				fieldsHTML += htmlByType[fieldDesc.type](fieldDesc);
+				addedFieldsByNameMap[fieldDesc.name] = 1;
 			}
 			else
 			{
@@ -205,15 +213,40 @@ export class UI
 		e.currentTarget.style.transform = `perspective(1000px) rotateX(0deg) rotateY(0deg)`;
 	}
 
+	_onWheel(e)
+	{
+		e.stopPropagation();
+	}
+
+	_onInput(e)
+	{
+		const name = e.currentTarget.name;
+		const value = parseFloat(e.currentTarget.value);
+		this._runEventHandlers("input", {name, value});
+	}
+
+	_onChange(e)
+	{
+		const name = e.currentTarget.name;
+		const value = e.currentTarget.checked;
+		this._runEventHandlers("change", {name, value});
+	}
+
 	_addInputEventListeners()
 	{
 		const inputs = this._uiBodyDOM.querySelectorAll("input");
+		const bindedInputHandler = this._onInput.bind(this);
+		const bindedChangeHandler = this._onChange.bind(this);
 
 		for (let i = 0; i < inputs.length; i++)
 		{
 			if (inputs[i].type === "number")
 			{
-				inputs[i].addEventListener("input", this._onInput);
+				inputs[i].addEventListener("input", bindedInputHandler);
+			}
+			else if (inputs[i].type === "checkbox")
+			{
+				inputs[i].addEventListener("change", bindedChangeHandler);
 			}
 		}
 	}
@@ -226,6 +259,7 @@ export class UI
 		// window.addEventListener("keydown", this._onKeydown.bind(this));
 		this._uiBodyDOM.addEventListener("mousemove", this._onMousemove);
 		this._uiBodyDOM.addEventListener("mouseleave", this._onMouseleave);
+		this._uiBodyDOM.addEventListener("wheel", this._onWheel);
 		this._addInputEventListeners();
 	}
 
@@ -233,5 +267,6 @@ export class UI
 	{
 		this._uiBodyDOM.removeEventListener("mousemove", this._onMousemove);
 		this._uiBodyDOM.removeEventListener("mouseleave", this._onMouseleave);
+		this._uiBodyDOM.removeEventListener("wheel", this._onWheel);
 	}
 }

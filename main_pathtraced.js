@@ -34,6 +34,8 @@ class MainModule
 		this._translationSpeedMul = .2;
 		this._depthSamples = 25;
 		this._shadowSampels = 10;
+		this._cellSize = 0.85;
+		this._animateLight = false;
 		this._computeStepDurationMS = 16; // Amount of ms to hold one frame of simulation for.
 
 		this.simulationIsActive = this._simulationIsActive;
@@ -122,62 +124,65 @@ class MainModule
 		this._addEventListeners();
 
 		this._ui.init();
-		// this._ui.setFields([
-		// 	{
-		// 		type: "integer",
-		// 		label: "grid size",
-		// 		name: "gridSize",
-		// 		value: GRID_SIZE,
-		// 		min: 3,
-		// 		max: 256
-		// 	},
-		// 	{
-		// 		type: "integer",
-		// 		label: "volume samples",
-		// 		name: "marchSamples",
-		// 		value: 200,
-		// 		min: 1,
-		// 		max: 500
-		// 	},
-		// 	{
-		// 		type: "integer",
-		// 		label: "shadow ray samples",
-		// 		name: "shadowRaySamples",
-		// 		value: 10,
-		// 		min: 1,
-		// 		max: 256
-		// 	},
-		// 	{
-		// 		type: "floatArray",
-		// 		label: "volume origin",
-		// 		name: "volOrigin",
-		// 		value: new Float32Array([0, 0, 0]),
-		// 		min: -100,
-		// 		max: 100
-		// 	},
-		// 	{
-		// 		type: "float",
-		// 		label: "visible cell size",
-		// 		name: "cellSize",
-		// 		value: .85,
-		// 		min: .01,
-		// 		max: 1
-		// 	},
-		// 	{
-		// 		type: "float",
-		// 		label: "temporal reprojection alpha",
-		// 		name: "temporalAlpha",
-		// 		value: .1,
-		// 		min: 0,
-		// 		max: 1
-		// 	},
-		// 	{
-		// 		type: "boolean",
-		// 		label: "animate light",
-		// 		name: "animateLight",
-		// 		value: true
-		// 	},
-		// ]);
+		this._ui.setFields([
+			{
+				type: "integer",
+				label: "grid size",
+				name: "gridSize",
+				value: GRID_SIZE,
+				min: 3,
+				max: 256
+			},
+			{
+				type: "float",
+				label: "cell size",
+				name: "_cellSize",
+				value: this._cellSize,
+				min: .01,
+				max: .9
+			},
+			{
+				type: "integer",
+				label: "depth samples",
+				name: "_depthSamples",
+				value: this._depthSamples,
+				min: 1,
+				max: 500
+			},
+			{
+				type: "integer",
+				label: "shadow samples",
+				name: "_shadowSampels",
+				value: this._shadowSampels,
+				min: 1,
+				max: 256
+			},
+			{
+				type: "floatArray",
+				label: "volume origin",
+				name: "volOrigin",
+				value: new Float32Array([0, 0, 0]),
+				min: -100,
+				max: 100
+			},
+			{
+				type: "float",
+				label: "temporal reprojection alpha",
+				name: "temporalAlpha",
+				value: .1,
+				min: 0,
+				max: 1
+			},
+			{
+				type: "boolean",
+				label: "animate light",
+				name: "_animateLight",
+				value: this._animateLight
+			},
+		]);
+
+		this._ui.registerHandler("input", this._onUIInput.bind(this));
+		this._ui.registerHandler("change", this._onUIChange.bind(this));
 		// this._ui.registerHandler("pointermove", this._onPointermove.bind(this));
 		// this._ui.registerHandler("pointerdown", this._onPointerdown.bind(this));
 		// this._ui.registerHandler("pointerup", this._onPointerup.bind(this));
@@ -206,9 +211,11 @@ class MainModule
 		this._elapsedTimeIndex = MemoryManager.allocf32(1);
 		this._depthRaySamplesIndex = MemoryManager.allocf32(1);
 		this._shadowRaySamplesIndex = MemoryManager.allocf32(1);
+		this._cellSizeIndex = MemoryManager.allocf32(1);
 		MemoryManager.writef32(this._windowSizeIndex, this._canvas.width, this._canvas.height);
 		MemoryManager.writef32(this._depthRaySamplesIndex, this._depthSamples);
 		MemoryManager.writef32(this._shadowRaySamplesIndex, this._shadowSampels);
+		MemoryManager.writef32(this._cellSizeIndex, this._cellSize);
 	}
 
 	_updatePerspectiveMatrix()
@@ -268,6 +275,25 @@ class MainModule
 		const offset = 0;
 		const button = Math.min(e.button, 2);
 		this._controlData[offset + button] = 0;
+	}
+
+	_onUIInput(e)
+	{
+		console.log(e);
+		if (this[e.name] !== undefined)
+		{
+			this[e.name] = e.value;
+		}
+	}
+
+	// TODO: replace?
+	_onUIChange(e)
+	{
+		console.log(e);
+		if(this[e.name] !== undefined)
+		{
+			this[e.name] = e.value;
+		}
 	}
 
 	async _getShaderSources()
@@ -1129,9 +1155,19 @@ class MainModule
 
 	_updateLights(dt)
 	{
-		// this._lightSource.y = Math.sin(performance.now() * .0007) * 2;
-		// this._lightSource.x = Math.cos(performance.now() * .0007) * 2;
+		if (this._animateLight)
+		{
+			this._lightSource.y = Math.sin(performance.now() * .0007) * 2;
+			this._lightSource.x = Math.cos(performance.now() * .0007) * 2;
+		}
 		this._lightSource.update();
+	}
+
+	_updateUIValues()
+	{
+		MemoryManager.writef32(this._depthRaySamplesIndex, this._depthSamples);
+		MemoryManager.writef32(this._shadowRaySamplesIndex, this._shadowSampels);
+		MemoryManager.writef32(this._cellSizeIndex, this._cellSize);
 	}
 
 	_renderPass(commandEncoder)
@@ -1185,6 +1221,7 @@ class MainModule
 		this._applyKeyboardInput();
 		this._updateLights(dt);
 		this._updateMatrices();
+		this._updateUIValues();
 		this._updateUniforms();
 
 		const commandEncoder = this._device.createCommandEncoder();
