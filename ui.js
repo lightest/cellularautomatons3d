@@ -92,10 +92,9 @@ export class UI
 		// this.selectionArea.init();
 	}
 
-	setFields(fields)
+	setUIElements(data)
 	{
-		this._cfg.fields = fields;
-		const html = this._buildUIHTML(fields);
+		const html = this._buildUIHTML(data);
 		document.body.insertAdjacentHTML("beforeend", html);
 		this._uiBodyDOM = document.querySelector(".ui-body");
 		this._addEventListeners();
@@ -117,11 +116,13 @@ export class UI
 		this._handlers[e].push(handler);
 	}
 
-	_buildUIHTML(fields)
+	_buildUIHTML(data)
 	{
+		const { fields, buttons } = data;
 		const addedFieldsByNameMap = {};
 
 		let fieldsHTML = "";
+		let buttonsHTML = "";
 
 		for (let i = 0; i < fields.length; i++)
 		{
@@ -144,9 +145,20 @@ export class UI
 			}
 		}
 
+		for (let i = 0; i < buttons.length; i++)
+		{
+			const buttonDesc = buttons[i];
+			buttonsHTML += `<div class="ui-button" data-name="${buttonDesc.name}">${buttonDesc.label}</div>`
+		}
+
 		let html =
 		`<div class="ui-container">
-			<div class="ui-body">${fieldsHTML}</div>
+			<div class="ui-body">
+				${fieldsHTML}
+				<div class="buttons-container">
+					${buttonsHTML}
+				</div>
+			</div>
 		</div>`;
 
 		return html;
@@ -232,11 +244,19 @@ export class UI
 		this._runEventHandlers("change", {name, value});
 	}
 
+	_onClick(e)
+	{
+		const name = e.currentTarget.dataset.name;
+		this._runEventHandlers("button-click", {name});
+	}
+
 	_addInputEventListeners()
 	{
 		const inputs = this._uiBodyDOM.querySelectorAll("input");
+		const buttons = this._uiBodyDOM.querySelectorAll(".ui-button");
 		const bindedInputHandler = this._onInput.bind(this);
 		const bindedChangeHandler = this._onChange.bind(this);
+		const buttonClickHandler = this._onClick.bind(this);
 
 		for (let i = 0; i < inputs.length; i++)
 		{
@@ -248,6 +268,11 @@ export class UI
 			{
 				inputs[i].addEventListener("change", bindedChangeHandler);
 			}
+		}
+
+		for (let i = 0; i < buttons.length; i++)
+		{
+			buttons[i].addEventListener("click", buttonClickHandler);
 		}
 	}
 

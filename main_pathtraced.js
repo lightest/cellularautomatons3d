@@ -70,6 +70,10 @@ class MainModule
 		this._resolutionDependentAssets = {};
 		this._renderTargetsSwapArray = [];
 		this._depthBuffersSwapArray = [];
+
+		this._buttonClickHandlers = {
+			"restartSim": this._resetStorageBuffers.bind(this)
+		};
 	}
 
 	async init()
@@ -124,65 +128,75 @@ class MainModule
 		this._addEventListeners();
 
 		this._ui.init();
-		this._ui.setFields([
-			{
-				type: "integer",
-				label: "grid size",
-				name: "gridSize",
-				value: GRID_SIZE,
-				min: 3,
-				max: 256
-			},
-			{
-				type: "float",
-				label: "cell size",
-				name: "_cellSize",
-				value: this._cellSize,
-				min: .01,
-				max: .9
-			},
-			{
-				type: "integer",
-				label: "depth samples",
-				name: "_depthSamples",
-				value: this._depthSamples,
-				min: 1,
-				max: 500
-			},
-			{
-				type: "integer",
-				label: "shadow samples",
-				name: "_shadowSampels",
-				value: this._shadowSampels,
-				min: 1,
-				max: 256
-			},
-			{
-				type: "floatArray",
-				label: "volume origin",
-				name: "volOrigin",
-				value: new Float32Array([0, 0, 0]),
-				min: -100,
-				max: 100
-			},
-			{
-				type: "float",
-				label: "temporal reprojection alpha",
-				name: "temporalAlpha",
-				value: .1,
-				min: 0,
-				max: 1
-			},
-			{
-				type: "boolean",
-				label: "animate light",
-				name: "_animateLight",
-				value: this._animateLight
-			},
-		]);
+		this._ui.setUIElements({
+			fields: [
+				{
+					type: "integer",
+					label: "grid size",
+					name: "gridSize",
+					value: GRID_SIZE,
+					min: 3,
+					max: 256
+				},
+				{
+					type: "float",
+					label: "cell size",
+					name: "_cellSize",
+					value: this._cellSize,
+					min: .01,
+					max: .9
+				},
+				{
+					type: "integer",
+					label: "depth samples",
+					name: "_depthSamples",
+					value: this._depthSamples,
+					min: 1,
+					max: 500
+				},
+				{
+					type: "integer",
+					label: "shadow samples",
+					name: "_shadowSampels",
+					value: this._shadowSampels,
+					min: 1,
+					max: 256
+				},
+				{
+					type: "floatArray",
+					label: "volume origin",
+					name: "volOrigin",
+					value: new Float32Array([0, 0, 0]),
+					min: -100,
+					max: 100
+				},
+				{
+					type: "float",
+					label: "temporal reprojection alpha",
+					name: "temporalAlpha",
+					value: .1,
+					min: 0,
+					max: 1
+				},
+				{
+					type: "boolean",
+					label: "animate light",
+					name: "_animateLight",
+					value: this._animateLight
+				},
+			],
+
+			buttons: [
+				{
+					label: "Restart sim",
+					name: "restartSim"
+				}
+			]
+		});
 
 		this._ui.registerHandler("input", this._onUIInput.bind(this));
 		this._ui.registerHandler("change", this._onUIChange.bind(this));
+		this._ui.registerHandler("button-click", this._onUIButtonClick.bind(this));
 		// this._ui.registerHandler("pointermove", this._onPointermove.bind(this));
 		// this._ui.registerHandler("pointerdown", this._onPointerdown.bind(this));
 		// this._ui.registerHandler("pointerup", this._onPointerup.bind(this));
@@ -279,7 +293,6 @@ class MainModule
 
 	_onUIInput(e)
 	{
-		console.log(e);
 		if (this[e.name] !== undefined)
 		{
 			this[e.name] = e.value;
@@ -289,10 +302,17 @@ class MainModule
 	// TODO: replace?
 	_onUIChange(e)
 	{
-		console.log(e);
 		if(this[e.name] !== undefined)
 		{
 			this[e.name] = e.value;
+		}
+	}
+
+	_onUIButtonClick(e)
+	{
+		if (typeof this._buttonClickHandlers[e.name] === "function")
+		{
+			this._buttonClickHandlers[e.name](e);
 		}
 	}
 
