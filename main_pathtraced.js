@@ -179,6 +179,14 @@ class MainModule
 					max: 1
 				},
 				{
+					type: "float",
+					label: "light manitude",
+					name: "_lightSource.magnitude",
+					value: this._lightSource.magnitude,
+					min: 0,
+					max: 10
+				},
+				{
 					type: "boolean",
 					label: "animate light",
 					name: "_animateLight",
@@ -291,12 +299,27 @@ class MainModule
 		this._controlData[offset + button] = 0;
 	}
 
+	_setValue(name = "", value = 0)
+	{
+		const nameComponents = name.split(".");
+		let valueAcceptor = this;
+
+		// Reach the end of nested value and stop right before last one.
+		for (let i = 0; i < nameComponents.length - 1; i++)
+		{
+			valueAcceptor = valueAcceptor[nameComponents[i]];
+		}
+
+		if (valueAcceptor[nameComponents[nameComponents.length - 1]] !== undefined)
+		{
+			// Last one will be value itself, set it.
+			valueAcceptor[nameComponents[nameComponents.length - 1]] = value;
+		}
+	}
+
 	_onUIInput(e)
 	{
-		if (this[e.name] !== undefined)
-		{
-			this[e.name] = e.value;
-		}
+		this._setValue(e.name, e.value);
 	}
 
 	// TODO: replace?

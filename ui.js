@@ -225,7 +225,7 @@ export class UI
 		e.currentTarget.style.transform = `perspective(1000px) rotateX(0deg) rotateY(0deg)`;
 	}
 
-	_onWheel(e)
+	_stopEventPropagation(e)
 	{
 		e.stopPropagation();
 	}
@@ -284,7 +284,8 @@ export class UI
 		// window.addEventListener("keydown", this._onKeydown.bind(this));
 		this._uiBodyDOM.addEventListener("mousemove", this._onMousemove);
 		this._uiBodyDOM.addEventListener("mouseleave", this._onMouseleave);
-		this._uiBodyDOM.addEventListener("wheel", this._onWheel);
+		this._uiBodyDOM.addEventListener("wheel", this._stopEventPropagation);
+		this._uiBodyDOM.addEventListener("keydown", this._stopEventPropagation);
 		this._addInputEventListeners();
 	}
 
@@ -292,6 +293,7 @@ export class UI
 	{
 		this._uiBodyDOM.removeEventListener("mousemove", this._onMousemove);
 		this._uiBodyDOM.removeEventListener("mouseleave", this._onMouseleave);
-		this._uiBodyDOM.removeEventListener("wheel", this._onWheel);
+		this._uiBodyDOM.removeEventListener("wheel", this._stopEventPropagation);
+		this._uiBodyDOM.removeEventListener("keydown", this._stopEventPropagation);
 	}
 }
