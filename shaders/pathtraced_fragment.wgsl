@@ -1,10 +1,11 @@
 @group(0) @binding(0) var<uniform> uGridSize: vec3f;
-@group(0) @binding(2) var<storage> cellStates: array<u32>;
 @group(0) @binding(11) var<uniform> uCommonUniformsBuffer: CommonBufferLayout;
 
 @group(1) @binding(0) var prevFrame: texture_2d<f32>;
 @group(1) @binding(1) var depthBuffer: texture_2d<f32>;
 @group(1) @binding(2) var prevFrameSampler: sampler;
+
+@group(2) @binding(0) var<storage> cellStates: array<u32>;
 
 struct TestStruct {
 	f0: vec3f,

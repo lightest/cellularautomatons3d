@@ -20,6 +20,7 @@ class MainModule
 		this._prevTime = performance.now();
 		this._frameDuration = 0;
 		this._simulationStep = 0;
+		this._swapBufferIndex = 0;
 		this._updateLoopBinded = this._updateLoop.bind(this);
 		this._controlData = new Uint32Array(8); // Has to be multiples of 16 bytes.
 		this._fov = 0;
@@ -63,10 +64,11 @@ class MainModule
 			prevY: -1
 		};
 
-		this._bindGroups = [];
-		this._bindGroupLayouts = [];
+		this._commonBindGroup = undefined;
+		this._bindGroupLayouts = {};
 		this._samplers = {};
 		this._textureBindGroups = [];
+		this._cellStatesBindGroups = [];
 		this._resolutionDependentAssets = {};
 		this._renderTargetsSwapArray = [];
 		this._depthBuffersSwapArray = [];
@@ -119,8 +121,9 @@ class MainModule
 		this._setupIndexBuffer(buffers.index);
 		const uniformBuffers = this._setupUniformsBuffers();
 		const storageBuffers = this._setupStorageBuffers();
-		this._setupBindGroups();
+		this._setupCommonBindGroup();
 		this._setupTextureResourcesBindGroups();
+		this._setupCellStorageBindGroups();
 		await this._setupPipelines();
 		this._setupRenderPassDescriptor();
 		// this._handleResize();
@@ -185,6 +188,14 @@ class MainModule
 					value: this._lightSource.magnitude,
 					min: 0,
 					max: 10
+				},
+				{
+					type: "integer",
+					label: "sim step duration",
+					name: "_computeStepDurationMS",
+					value: this._computeStepDurationMS,
+					min: 16,
+					max: 3000
 				},
 				{
 					type: "boolean",
@@ -915,7 +926,7 @@ class MainModule
 		});
 
 		const renderPipelineLayout = this._device.createPipelineLayout({
-			bindGroupLayouts: [...this._bindGroupLayouts]
+			bindGroupLayouts: [...Object.values(this._bindGroupLayouts)]
 		});
 
 		const buffersLayout = [
@@ -980,7 +991,11 @@ class MainModule
 		const computePipelineDescriptor =
 		{
 			layout: this._device.createPipelineLayout({
-				bindGroupLayouts: [this._bindGroupLayouts[0]]
+				bindGroupLayouts:
+				[
+					this._bindGroupLayouts.mainLayout,
+					this._bindGroupLayouts.cellStorageBindGroupLayout
+				]
 			}),
 			compute: {
 				module: computeShaderModule,
@@ -1019,7 +1034,7 @@ class MainModule
 			]
 		});
 
-		this._bindGroupLayouts[1] = samplersBindGroupLayout;
+		this._bindGroupLayouts.samplersBindGroupLayout = samplersBindGroupLayout;
 
 		// For samplerBindGroups we user reverse order for binded renderTargets.
 		// First binding 1, then 0, because on first frame renderTarget0 is the output, renderTarget1 is input.
@@ -1062,10 +1077,63 @@ class MainModule
 		});
 	}
 
-	_setupBindGroups ()
+	_setupCellStorageBindGroups()
+	{
+		const storageBuffers = this._cellStorageBuffers;
+
+		const cellStorageBindGroupLayout = this._device.createBindGroupLayout({
+			label: "cell storage bindgroup layout",
+			entries: [
+				{
+					binding: 0,
+					visibility: GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT | GPUShaderStage.COMPUTE,
+					buffer: { type: "read-only-storage" }
+				},
+				{
+					binding: 1,
+					visibility: GPUShaderStage.COMPUTE,
+					buffer: { type: "storage" }
+				}
+			]
+		});
+
+		this._bindGroupLayouts.cellStorageBindGroupLayout = cellStorageBindGroupLayout;
+
+		this._cellStatesBindGroups[0] = this._device.createBindGroup({
+			label: "cell storage bindgroup 0",
+			layout: cellStorageBindGroupLayout,
+			entries: [
+				{
+					binding: 0,
+					resource: { buffer: storageBuffers[0] }
+				},
+				{
+					binding: 1,
+					resource: { buffer: storageBuffers[1] }
+				}
+			]
+		});
+
+		// Cell storage bind group used for swapping, note alterated storageBuffers[] indices.
+		this._cellStatesBindGroups[1] = this._device.createBindGroup({
+			label: "cell storage bindgroup 1",
+			layout: cellStorageBindGroupLayout,
+			entries: [
+				{
+					binding: 0,
+					resource: { buffer: storageBuffers[1] }
+				},
+				{
+					binding: 1,
+					resource: { buffer: storageBuffers[0] }
+				}
+			]
+		});
+	}
+
+	_setupCommonBindGroup ()
 	{
 		const uniformBuffers = this._uniformBuffers;
-		const storageBuffers = this._cellStorageBuffers;
 
 		const mainLayout = this._device.createBindGroupLayout({
 			label: "main_bind_group_layout",
@@ -1081,16 +1149,6 @@ class MainModule
 					buffer: { type: "uniform" }
 				},
 				{
-					binding: 2,
-					visibility: GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT | GPUShaderStage.COMPUTE,
-					buffer: { type: "read-only-storage" }
-				},
-				{
-					binding: 3,
-					visibility: GPUShaderStage.COMPUTE,
-					buffer: { type: "storage" }
-				},
-				{
 					binding: 11,
 					visibility: GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT,
 					buffer: { type: "uniform" }
@@ -1098,9 +1156,9 @@ class MainModule
 			]
 		});
 
-		this._bindGroupLayouts[0] = mainLayout;
+		this._bindGroupLayouts.mainLayout = mainLayout;
 
-		this._bindGroups[0] = this._device.createBindGroup({
+		this._commonBindGroup = this._device.createBindGroup({
 			label: "bind_group_0",
 			layout: mainLayout,
 			entries: [
@@ -1111,42 +1169,6 @@ class MainModule
 				{
 					binding: 1,
 					resource: { buffer: uniformBuffers.controlDataBuffer }
-				},
-				{
-					binding: 2,
-					resource: { buffer: storageBuffers[0] }
-				},
-				{
-					binding: 3,
-					resource: { buffer: storageBuffers[1] }
-				},
-				{
-					binding: 11,
-					resource: { buffer: uniformBuffers.commonFrequentBuffer }
-				}
-			]
-		});
-
-		// Swapping storage buffers to swap cell states storages.
-		this._bindGroups[1] = this._device.createBindGroup({
-			label: "bind_group_1",
-			layout: mainLayout,
-			entries: [
-				{
-					binding: 0,
-					resource: { buffer: uniformBuffers.gridDimensionsBuffer }
-				},
-				{
-					binding: 1,
-					resource: { buffer: uniformBuffers.controlDataBuffer }
-				},
-				{
-					binding: 2,
-					resource: { buffer: storageBuffers[1] }
-				},
-				{
-					binding: 3,
-					resource: { buffer: storageBuffers[0] }
 				},
 				{
 					binding: 11,
@@ -1215,24 +1237,24 @@ class MainModule
 
 	_renderPass(commandEncoder)
 	{
-		const simStepMod2 = this._simulationStep % 2;
-
 		// TODO: should we store created views somewhere instead?
 		this._renderPassDescriptor.colorAttachments[0].view = this._ctx.getCurrentTexture().createView();
-		this._renderPassDescriptor.colorAttachments[1].view = this._renderTargetsSwapArray[simStepMod2].createView();
-		this._renderPassDescriptor.colorAttachments[2].view = this._depthBuffersSwapArray[simStepMod2].createView();
+		this._renderPassDescriptor.colorAttachments[1].view = this._renderTargetsSwapArray[this._swapBufferIndex].createView();
+		this._renderPassDescriptor.colorAttachments[2].view = this._depthBuffersSwapArray[this._swapBufferIndex].createView();
 
 		const renderPassEncoder = commandEncoder.beginRenderPass(this._renderPassDescriptor);
 		renderPassEncoder.setPipeline(this._renderPipeline);
 		renderPassEncoder.setVertexBuffer(0, this._vertexBuffer);
 		renderPassEncoder.setIndexBuffer(this._indexBuffer, "uint32");
-		renderPassEncoder.setBindGroup(0, this._bindGroups[simStepMod2]);
-		renderPassEncoder.setBindGroup(1, this._textureBindGroups[simStepMod2]);
+		renderPassEncoder.setBindGroup(0, this._commonBindGroup);
+		renderPassEncoder.setBindGroup(1, this._textureBindGroups[this._swapBufferIndex]);
+		renderPassEncoder.setBindGroup(2, this._cellStatesBindGroups[this._simulationStep % 2]);
 
 		// this._indexBuffer.size/4 due to uint32 - 4 bytes per index.
 		// renderPassEncoder.drawIndexed(this._indexBuffer.size / 4, GRID_SIZE * GRID_SIZE * GRID_SIZE);
 		renderPassEncoder.drawIndexed(this._indexBuffer.size / 4, 1);
 		renderPassEncoder.end();
+		this._swapBufferIndex = (this._swapBufferIndex + 1) % 2;
 	}
 
 	_computePass(commandEncoder)
@@ -1240,7 +1262,8 @@ class MainModule
 		this._simulationStep++;
 		const computePassEncoder = commandEncoder.beginComputePass();
 		computePassEncoder.setPipeline(this._computePipeline);
-		computePassEncoder.setBindGroup(0, this._bindGroups[this._simulationStep % 2]);
+		computePassEncoder.setBindGroup(0, this._commonBindGroup);
+		computePassEncoder.setBindGroup(1, this._cellStatesBindGroups[this._simulationStep % 2]);
 		const workGroupCount = Math.ceil(GRID_SIZE / WORK_GROUP_SIZE);
 		computePassEncoder.dispatchWorkgroups(workGroupCount, workGroupCount, workGroupCount);
 		computePassEncoder.end();
@@ -1277,7 +1300,8 @@ class MainModule
 			// this._applyMouseInput();
 
 			// If it's time to update make a simulationStep++ and compute next state.
-			// Render it on next frame.
+			// Rendering of cell storage will happen on next frame.
+			// This way we ensure we can see initial state, set before computations.
 			this._computePass(commandEncoder);
 			this._frameDuration = 0;
 

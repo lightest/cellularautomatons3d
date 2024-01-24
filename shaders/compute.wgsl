@@ -1,7 +1,8 @@
 @group(0) @binding(0) var<uniform> colsRows: vec3f;
 @group(0) @binding(1) var<uniform> controlData: ControlData;
-@group(0) @binding(2) var<storage> cellStateIn: array<u32>;
-@group(0) @binding(3) var<storage, read_write> cellStateOut: array<u32>;
+
+@group(1) @binding(0) var<storage> cellStateIn: array<u32>;
+@group(1) @binding(1) var<storage, read_write> cellStateOut: array<u32>;
 
 struct ControlData {
 	pressedMouseButtons: vec3u,

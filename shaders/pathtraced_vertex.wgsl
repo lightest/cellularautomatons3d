@@ -1,7 +1,8 @@
 @group(0) @binding(0) var<uniform> uGridSize: vec3f;
 @group(0) @binding(1) var<uniform> controlData: ControlData;
-@group(0) @binding(2) var<storage> cellStates: array<u32>;
 @group(0) @binding(11) var<uniform> uCommonBuffer: CommonBufferLayout;
+
+@group(2) @binding(0) var<storage> cellStates: array<u32>;
 
 struct ControlData {
 	pressedMouseButtons: vec3u,
