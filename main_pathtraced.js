@@ -809,17 +809,17 @@ class MainModule
 	{
 		if (x < 0)
 		{
-			x = GRID_SIZE + x;
+			x = this._gridSize + x;
 		}
 		if (y < 0)
 		{
-			y = GRID_SIZE + y;
+			y = this._gridSize + y;
 		}
 		if (z < 0)
 		{
-			z = GRID_SIZE + z;
+			z = this._gridSize + z;
 		}
-		return (x % GRID_SIZE) + (y % GRID_SIZE) * GRID_SIZE + (z % GRID_SIZE) * GRID_SIZE * GRID_SIZE;
+		return (x % this._gridSize) + (y % this._gridSize) * this._gridSize + (z % this._gridSize) * this._gridSize * this._gridSize;
 	}
 
 	_setupIndexBuffer(data)
