@@ -23,6 +23,7 @@ body {
 }
 
 .ui-body {
+	text-transform: uppercase;
 	background: rgb(37 37 37 / 33%);
 	border-radius: 16px;
 	height: 100%;
@@ -40,6 +41,7 @@ body {
 
 .ui-input {
 	margin: 8px 0;
+	position: relative;
 }
 
 .ui-input label {
@@ -70,6 +72,10 @@ body {
 .ui-input input[type="checkbox"]
 {
 
+}
+
+.ui-input input.restart-required {
+	outline-color: orange;
 }
 
 .ui-button {

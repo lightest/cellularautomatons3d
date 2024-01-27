@@ -175,6 +175,15 @@ export class UI
 		}
 	}
 
+	markSimRestartRequired(fieldName)
+	{
+		const inputField = this._uiBodyDOM.querySelector(`[name="${fieldName}"]`);
+		if (inputField)
+		{
+			inputField.classList.add("restart-required");
+		}
+	}
+
 	_onPointermove(e)
 	{
 		this._runEventHandlers("pointermove", e);

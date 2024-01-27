@@ -35,6 +35,7 @@ class MainModule
 		this._translationSpeedMul = .2;
 		this._depthSamples = 25;
 		this._shadowSampels = 10;
+		this._gridSize = 32;
 		this._cellSize = 0.85;
 		this._animateLight = false;
 		this._computeStepDurationMS = 16; // Amount of ms to hold one frame of simulation for.
@@ -136,8 +137,8 @@ class MainModule
 				{
 					type: "integer",
 					label: "grid size",
-					name: "gridSize",
-					value: GRID_SIZE,
+					name: "_gridSize",
+					value: this._gridSize,
 					min: 3,
 					max: 256
 				},
@@ -191,7 +192,7 @@ class MainModule
 				},
 				{
 					type: "integer",
-					label: "sim step duration",
+					label: "sim step duration [ms]",
 					name: "_computeStepDurationMS",
 					value: this._computeStepDurationMS,
 					min: 16,
@@ -330,7 +331,15 @@ class MainModule
 
 	_onUIInput(e)
 	{
-		this._setValue(e.name, e.value);
+		if (e.name === "_gridSize")
+		{
+			this._ui.markSimRestartRequired(e.name);
+			this._setValue(e.name, e.value);
+		}
+		else
+		{
+			this._setValue(e.name, e.value);
+		}
 	}
 
 	// TODO: replace?
@@ -830,7 +839,7 @@ class MainModule
 	_setupUniformsBuffers ()
 	{
 		// TODO: Should these be unified into a singular uniforms buffer?
-		const gridDimensionsData = new Float32Array([GRID_SIZE, GRID_SIZE, GRID_SIZE]);
+		const gridDimensionsData = new Float32Array([this._gridSize, this._gridSize, this._gridSize]);
 		const gridDimensionsBuffer = this._device.createBuffer({
 			label: "grid uniforms",
 			size: gridDimensionsData.byteLength,
@@ -864,7 +873,7 @@ class MainModule
 
 	_setupStorageBuffers ()
 	{
-		const cellStateData = new Uint32Array(GRID_SIZE * GRID_SIZE * GRID_SIZE);
+		const cellStateData = new Uint32Array(this._gridSize * this._gridSize * this._gridSize);
 
 		const cellStorageBuffers = [
 			this._device.createBuffer({
@@ -883,7 +892,7 @@ class MainModule
 		this._cellStorageBuffers = cellStorageBuffers;
 
 		// Sets initial state.
-		const center = Math.floor(GRID_SIZE * .5);
+		const center = Math.floor(this._gridSize * .5);
 		cellStateData[this._getCellIdx3D(center, center, center)] = 1;
 		console.log(cellStateData);
 
@@ -906,11 +915,14 @@ class MainModule
 
 	_resetStorageBuffers()
 	{
-		const cellStateData = new Uint32Array(GRID_SIZE * GRID_SIZE * GRID_SIZE);
-		const center = Math.floor(GRID_SIZE * .5);
-		cellStateData[this._getCellIdx3D(center, center, center)] = 1;
-		this._device.queue.writeBuffer(this._cellStorageBuffers[0], 0, cellStateData);
-		this._device.queue.writeBuffer(this._cellStorageBuffers[1], 0, cellStateData);
+		// const cellStateData = new Uint32Array(this._gridSize * this._gridSize * this._gridSize);
+		// const center = Math.floor(this._gridSize * .5);
+		// cellStateData[this._getCellIdx3D(center, center, center)] = 1;
+		// this._device.queue.writeBuffer(this._cellStorageBuffers[0], 0, cellStateData);
+		// this._device.queue.writeBuffer(this._cellStorageBuffers[1], 0, cellStateData);
+		this._device.queue.writeBuffer(this._uniformBuffers.gridDimensionsBuffer, 0, new Float32Array([this._gridSize, this._gridSize, this._gridSize]));
+		this._setupStorageBuffers();
+		this._setupCellStorageBindGroups();
 	}
 
 	async _setupPipelines()
@@ -1264,7 +1276,7 @@ class MainModule
 		computePassEncoder.setPipeline(this._computePipeline);
 		computePassEncoder.setBindGroup(0, this._commonBindGroup);
 		computePassEncoder.setBindGroup(1, this._cellStatesBindGroups[this._simulationStep % 2]);
-		const workGroupCount = Math.ceil(GRID_SIZE / WORK_GROUP_SIZE);
+		const workGroupCount = Math.ceil(this._gridSize / WORK_GROUP_SIZE);
 		computePassEncoder.dispatchWorkgroups(workGroupCount, workGroupCount, workGroupCount);
 		computePassEncoder.end();
 	}
