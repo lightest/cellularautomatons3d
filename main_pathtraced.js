@@ -2,7 +2,6 @@ import { UI } from "./ui.js";
 import * as MemoryManager from "./MemoryManager.js";
 import { vec3, mat4, quat } from "./libs/wgpu-matrix.module.js";
 
-const GRID_SIZE = 32;
 const WORK_GROUP_SIZE = 4;
 const TRANSLATION_SPEED = .15;
 const MIN_TRANSLATION_SPEED_MUL = .01;
@@ -12,17 +11,13 @@ class MainModule
 {
 	constructor()
 	{
-		this._ui = new UI({
-			gridRows: GRID_SIZE,
-			gridCols: GRID_SIZE
-		});
-
+		this._ui = new UI();
+		this._gridSize = 32;
 		this._prevTime = performance.now();
 		this._frameDuration = 0;
 		this._simulationStep = 0;
 		this._swapBufferIndex = 0;
 		this._updateLoopBinded = this._updateLoop.bind(this);
-		this._controlData = new Uint32Array(8); // Has to be multiples of 16 bytes.
 		this._fov = 0;
 		this._sampleCount = 1;
 		this._viewMat = undefined;
@@ -31,18 +26,15 @@ class MainModule
 		this._projectionMat = undefined;
 		this._projViewMatInv = undefined;
 		this._prevProjViewMatInv = undefined;
-		this._simulationIsActive = 1;
 		this._translationSpeedMul = .2;
 		this._depthSamples = 25;
 		this._shadowSampels = 10;
-		this._gridSize = 32;
 		this._cellSize = 0.85;
 		this._animateLight = false;
 		this._computeStepDurationMS = 16; // Amount of ms to hold one frame of simulation for.
 
-		this.simulationIsActive = this._simulationIsActive;
-
-		this._lightSource = {
+		this._lightSource =
+		{
 			x: 0.35, y: 1.5, z: 0,
 			magnitude: 2,
 			_bufferIndex: MemoryManager.allocf32(4),
@@ -65,17 +57,20 @@ class MainModule
 			prevY: -1
 		};
 
+		this._uniformBuffers = {};
+		this._cellStorageBuffers = [];
+		this._resolutionDependentAssets = {};
 		this._commonBindGroup = undefined;
 		this._bindGroupLayouts = {};
 		this._samplers = {};
 		this._textureBindGroups = [];
 		this._cellStatesBindGroups = [];
-		this._resolutionDependentAssets = {};
 		this._renderTargetsSwapArray = [];
 		this._depthBuffersSwapArray = [];
+		this._toApplyOnSimRestart = [];
 
 		this._buttonClickHandlers = {
-			"restartSim": this._resetStorageBuffers.bind(this)
+			"restartSim": this._restartSim.bind(this)
 		};
 	}
 
@@ -120,8 +115,8 @@ class MainModule
 		const buffers = this._getPlaneVertices();
 		this._setupVertexBuffer(buffers.vertex);
 		this._setupIndexBuffer(buffers.index);
-		const uniformBuffers = this._setupUniformsBuffers();
-		const storageBuffers = this._setupStorageBuffers();
+		this._setupUniformsBuffers();
+		this._setupStorageBuffers();
 		this._setupCommonBindGroup();
 		this._setupTextureResourcesBindGroups();
 		this._setupCellStorageBindGroups();
@@ -138,6 +133,7 @@ class MainModule
 					type: "integer",
 					label: "grid size",
 					name: "_gridSize",
+					applyOnRestart: true,
 					value: this._gridSize,
 					min: 3,
 					max: 256
@@ -217,19 +213,10 @@ class MainModule
 		this._ui.registerHandler("input", this._onUIInput.bind(this));
 		this._ui.registerHandler("change", this._onUIChange.bind(this));
 		this._ui.registerHandler("button-click", this._onUIButtonClick.bind(this));
-		// this._ui.registerHandler("pointermove", this._onPointermove.bind(this));
-		// this._ui.registerHandler("pointerdown", this._onPointerdown.bind(this));
-		// this._ui.registerHandler("pointerup", this._onPointerup.bind(this));
 
 		this._setupUniformsMemoryCPU();
 
 		this._updateLoop();
-	}
-
-	set simulationIsActive(v)
-	{
-		this._simulationIsActive = Number(v);
-		this._controlData[3] = this._simulationIsActive;
 	}
 
 	set fov(angle)
@@ -283,34 +270,6 @@ class MainModule
 		mat4.copy(this._projViewMatInv, this._prevProjViewMatInv);
 	}
 
-	_onPointermove(e)
-	{
-		const gridX = Math.max(0, Math.min(GRID_SIZE - 1, Math.round((e.clientX / window.innerWidth) * (GRID_SIZE - 1))));
-		const gridY = Math.max(0, Math.min(GRID_SIZE - 1, Math.round((1 - e.clientY / window.innerHeight) * (GRID_SIZE - 1))));
-		const idx = this._getCellIdx(gridX, gridY);
-
-		// TODO: create a structure which manages offset.
-		const offset = 4;
-		this._controlData[offset] = gridX;
-		this._controlData[offset + 1] = gridY;
-	}
-
-	_onPointerdown(e)
-	{
-		// TODO: create a structure which manages offset.
-		const offset = 0;
-		const button = Math.min(e.button, 2);
-		this._controlData[offset + button] = 1;
-	}
-
-	_onPointerup(e)
-	{
-		// TODO: create a structure which manages offset.
-		const offset = 0;
-		const button = Math.min(e.button, 2);
-		this._controlData[offset + button] = 0;
-	}
-
 	_setValue(name = "", value = 0)
 	{
 		const nameComponents = name.split(".");
@@ -329,12 +288,24 @@ class MainModule
 		}
 	}
 
+	_restartSim()
+	{
+		for (let i = 0; i < this._toApplyOnSimRestart.length; i++)
+		{
+			const data = this._toApplyOnSimRestart[i];
+			this._setValue(data.name, data.value);
+		}
+		this._resetStorageBuffers();
+		this._device.queue.writeBuffer(this._uniformBuffers.gridDimensionsBuffer, 0, new Float32Array([this._gridSize, this._gridSize, this._gridSize]));
+		this._ui.resetUIElementsStates();
+	}
+
 	_onUIInput(e)
 	{
-		if (e.name === "_gridSize")
+		if (e.applyOnRestart)
 		{
 			this._ui.markSimRestartRequired(e.name);
-			this._setValue(e.name, e.value);
+			this._toApplyOnSimRestart.push(e);
 		}
 		else
 		{
@@ -394,6 +365,11 @@ class MainModule
 
 	_createResolutionDependentAssests()
 	{
+		for (let i in this._resolutionDependentAssets)
+		{
+			this._resolutionDependentAssets[i].destroy();
+		}
+
 		const renderTarget0 = this._device.createTexture({
 			size: [this._canvas.width, this._canvas.height],
 			sampleCount: this._sampleCount,
@@ -435,14 +411,6 @@ class MainModule
 		};
 	}
 
-	_reapplyResolutionDependantAssests()
-	{
-		if (this._sampleCount > 1)
-		{
-			this._renderPassDescriptor.colorAttachments[0].view = this._resolutionDependentAssets.renderTarget0.createView();
-		}
-	}
-
 	_handleResize()
 	{
 		const pixelRatio = window.devicePixelRatio || 1.0;
@@ -457,7 +425,6 @@ class MainModule
 		MemoryManager.writef32(this._windowSizeIndex, width, height);
 
 		this._createResolutionDependentAssests();
-		this._reapplyResolutionDependantAssests();
 		this._setupTextureResourcesBindGroups();
 		this._updatePerspectiveMatrix();
 	}
@@ -777,32 +744,30 @@ class MainModule
 
 	_setupVertexBuffer(data)
 	{
+		if (this._vertexBuffer)
+		{
+			this._vertexBuffer.destroy();
+		}
+
 		this._vertexBuffer = this._device.createBuffer({
 			size: data.byteLength,
 			usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST
 		});
 		const bufferWriteStartIdx = 0
-		const dataStartIdx = 0;
-		this._device.queue.writeBuffer(
-			this._vertexBuffer,
-			bufferWriteStartIdx,
-			data,
-			dataStartIdx,
-			data.length
-		);
+		this._device.queue.writeBuffer(this._vertexBuffer, bufferWriteStartIdx, data);
 	}
 
 	_getCellIdx (x, y)
 	{
 		if (x < 0)
 		{
-			x = GRID_SIZE + x;
+			x = this._gridSize + x;
 		}
 		if (y < 0)
 		{
-			y = GRID_SIZE + y;
+			y = this._gridSize + y;
 		}
-		return (x % GRID_SIZE) + (y % GRID_SIZE) * GRID_SIZE;
+		return (x % this._gridSize) + (y % this._gridSize) * this._gridSize;
 	}
 
 	_getCellIdx3D(x, y, z)
@@ -824,31 +789,32 @@ class MainModule
 
 	_setupIndexBuffer(data)
 	{
+		if (this._indexBuffer)
+		{
+			this._indexBuffer.destroy();
+		}
+
 		this._indexBuffer = this._device.createBuffer({
 			size: data.byteLength,
 			usage: GPUBufferUsage.INDEX | GPUBufferUsage.COPY_DST
 		});
+
 		const bufferWriteStartIdx = 0;
-		this._device.queue.writeBuffer(
-			this._indexBuffer,
-			bufferWriteStartIdx,
-			data
-		);
+		this._device.queue.writeBuffer(this._indexBuffer, bufferWriteStartIdx, data);
 	}
 
 	_setupUniformsBuffers ()
 	{
+		for (let i in this._uniformBuffers)
+		{
+			this._uniformBuffers[i].destroy();
+		}
+
 		// TODO: Should these be unified into a singular uniforms buffer?
 		const gridDimensionsData = new Float32Array([this._gridSize, this._gridSize, this._gridSize]);
 		const gridDimensionsBuffer = this._device.createBuffer({
 			label: "grid uniforms",
 			size: gridDimensionsData.byteLength,
-			usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST
-		});
-
-		const controlDataBuffer = this._device.createBuffer({
-			label: "pointer data",
-			size: this._controlData.byteLength,
 			usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST
 		});
 
@@ -859,12 +825,10 @@ class MainModule
 		});
 
 		this._device.queue.writeBuffer(gridDimensionsBuffer, 0, gridDimensionsData);
-		this._device.queue.writeBuffer(controlDataBuffer, 0, this._controlData);
 		this._device.queue.writeBuffer(commonFrequentBuffer, 0, MemoryManager.bufferf32.buffer);
 
 		this._uniformBuffers = {
 			gridDimensionsBuffer,
-			controlDataBuffer,
 			commonFrequentBuffer
 		};
 
@@ -873,7 +837,16 @@ class MainModule
 
 	_setupStorageBuffers ()
 	{
+		for (let i = 0; i < this._cellStorageBuffers.length; i++)
+		{
+			this._cellStorageBuffers[i].destroy();
+		}
+
 		const cellStateData = new Uint32Array(this._gridSize * this._gridSize * this._gridSize);
+
+		// Sets initial state.
+		const center = Math.floor(this._gridSize * .5);
+		cellStateData[this._getCellIdx3D(center, center, center)] = 1;
 
 		const cellStorageBuffers = [
 			this._device.createBuffer({
@@ -889,26 +862,10 @@ class MainModule
 			})
 		];
 
-		this._cellStorageBuffers = cellStorageBuffers;
-
-		// Sets initial state.
-		const center = Math.floor(this._gridSize * .5);
-		cellStateData[this._getCellIdx3D(center, center, center)] = 1;
-		console.log(cellStateData);
-
-		// Center of the grid;
-		const x = Math.floor(GRID_SIZE * .5);
-		const y = Math.floor(GRID_SIZE * .5);
-
-		// Glider.
-		// cellStateData[this._getCellIdx(x + 1, y)] = 1;
-		// cellStateData[this._getCellIdx(x + 1, y - 1)] = 1;
-		// cellStateData[this._getCellIdx(x, y - 1)] = 1;
-		// cellStateData[this._getCellIdx(x - 1, y - 1)] = 1;
-		// cellStateData[this._getCellIdx(x, y + 1)] = 1;
-
 		this._device.queue.writeBuffer(cellStorageBuffers[0], 0, cellStateData);
 		this._device.queue.writeBuffer(cellStorageBuffers[1], 0, cellStateData);
+
+		this._cellStorageBuffers = cellStorageBuffers;
 
 		return cellStorageBuffers;
 	}
@@ -920,7 +877,6 @@ class MainModule
 		// cellStateData[this._getCellIdx3D(center, center, center)] = 1;
 		// this._device.queue.writeBuffer(this._cellStorageBuffers[0], 0, cellStateData);
 		// this._device.queue.writeBuffer(this._cellStorageBuffers[1], 0, cellStateData);
-		this._device.queue.writeBuffer(this._uniformBuffers.gridDimensionsBuffer, 0, new Float32Array([this._gridSize, this._gridSize, this._gridSize]));
 		this._setupStorageBuffers();
 		this._setupCellStorageBindGroups();
 	}
@@ -1156,11 +1112,6 @@ class MainModule
 					buffer: { type: "uniform" }
 				},
 				{
-					binding: 1,
-					visibility: GPUShaderStage.VERTEX | GPUShaderStage.COMPUTE,
-					buffer: { type: "uniform" }
-				},
-				{
 					binding: 11,
 					visibility: GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT,
 					buffer: { type: "uniform" }
@@ -1177,10 +1128,6 @@ class MainModule
 				{
 					binding: 0,
 					resource: { buffer: uniformBuffers.gridDimensionsBuffer }
-				},
-				{
-					binding: 1,
-					resource: { buffer: uniformBuffers.controlDataBuffer }
 				},
 				{
 					binding: 11,
@@ -1225,8 +1172,6 @@ class MainModule
 
 	_updateUniforms()
 	{
-		// console.log(this._controlData)
-		this._device.queue.writeBuffer(this._uniformBuffers.controlDataBuffer, 0, this._controlData);
 		this._device.queue.writeBuffer(this._uniformBuffers.commonFrequentBuffer, 0, MemoryManager.bufferf32.buffer);
 	}
 
@@ -1263,7 +1208,6 @@ class MainModule
 		renderPassEncoder.setBindGroup(2, this._cellStatesBindGroups[this._simulationStep % 2]);
 
 		// this._indexBuffer.size/4 due to uint32 - 4 bytes per index.
-		// renderPassEncoder.drawIndexed(this._indexBuffer.size / 4, GRID_SIZE * GRID_SIZE * GRID_SIZE);
 		renderPassEncoder.drawIndexed(this._indexBuffer.size / 4, 1);
 		renderPassEncoder.end();
 		this._swapBufferIndex = (this._swapBufferIndex + 1) % 2;
@@ -1316,11 +1260,6 @@ class MainModule
 			// This way we ensure we can see initial state, set before computations.
 			this._computePass(commandEncoder);
 			this._frameDuration = 0;
-
-			// Resetting mouse buttons.
-			this._controlData[0] = 0;
-			this._controlData[1] = 0;
-			this._controlData[2] = 0;
 		}
 
 		const commandBuffer = commandEncoder.finish();

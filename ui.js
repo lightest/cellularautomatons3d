@@ -1,5 +1,3 @@
-import { SelectionArea } from "./SelectionArea.js";
-
 const htmlByType = {
 	"integer": (fieldDesc) =>
 	{
@@ -12,7 +10,8 @@ const htmlByType = {
 					value="${fieldDesc.value}"
 					step="1"
 					min="${fieldDesc.min || 0}"
-					max="${fieldDesc.max || 10}"/>
+					max="${fieldDesc.max || 10}"
+					data-apply-on-restart="${fieldDesc.applyOnRestart || false}" />
 			</label>
 		</div>`
 		);
@@ -29,7 +28,8 @@ const htmlByType = {
 					value="${fieldDesc.value}"
 					step="0.01"
 					min="${fieldDesc.min || 0}"
-					max="${fieldDesc.max || 1}"/>
+					max="${fieldDesc.max || 1}"
+					data-apply-on-restart="${fieldDesc.applyOnRestart || false}" />
 			</label>
 		</div>`
 		);
@@ -80,16 +80,10 @@ export class UI
 		this._uiBodyDOM = undefined;
 		this._handlers = {};
 		this.drawing = false;
-		this.selectionArea = new SelectionArea({
-			gridRows: this._cfg.gridRows,
-			gridCols: this._cfg.gridCols,
-			snapToGrid: true
-		});
 	}
 
 	init()
 	{
-		// this.selectionArea.init();
 	}
 
 	setUIElements(data)
@@ -98,6 +92,17 @@ export class UI
 		document.body.insertAdjacentHTML("beforeend", html);
 		this._uiBodyDOM = document.querySelector(".ui-body");
 		this._addEventListeners();
+	}
+
+	resetUIElementsStates()
+	{
+		const inputs = this._uiBodyDOM.querySelectorAll("input");
+
+		for (let i = 0; i < inputs.length; i++)
+		{
+			inputs[i].classList.remove("restart-required");
+			inputs[i].title = "";
+		}
 	}
 
 	registerHandler(e, handler)
@@ -181,6 +186,7 @@ export class UI
 		if (inputField)
 		{
 			inputField.classList.add("restart-required");
+			inputField.title = "RESTART REQUIRED!";
 		}
 	}
 
@@ -243,7 +249,8 @@ export class UI
 	{
 		const name = e.currentTarget.name;
 		const value = parseFloat(e.currentTarget.value);
-		this._runEventHandlers("input", {name, value});
+		const applyOnRestart = e.currentTarget.dataset.applyOnRestart === "true";
+		this._runEventHandlers("input", {name, value, applyOnRestart});
 	}
 
 	_onChange(e)

@@ -75,7 +75,17 @@ body {
 }
 
 .ui-input input.restart-required {
-	outline-color: orange;
+	animation: background-animation linear 1s infinite;
+}
+
+@keyframes background-animation{
+	0% {
+		background: orange;
+	}
+
+	100% {
+		background: transparent;
+	}
 }
 
 .ui-button {

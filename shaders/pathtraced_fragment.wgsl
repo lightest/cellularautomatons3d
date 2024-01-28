@@ -43,7 +43,6 @@ struct VertexOut {
 	// @location(0) color: vec4f,
 	@location(1) worldPosition: vec4f,
 	@location(2) cell: vec3f,
-	@location(3) @interpolate(flat) pointerIdx: u32,
 	@location(4) @interpolate(flat) instance: u32,
 	@location(5) normal: vec3f,
 	@location(6) worldNormal: vec3f,
