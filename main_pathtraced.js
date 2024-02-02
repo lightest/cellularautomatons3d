@@ -163,14 +163,6 @@ class MainModule
 					max: 256
 				},
 				{
-					type: "floatArray",
-					label: "volume origin",
-					name: "volOrigin",
-					value: new Float32Array([0, 0, 0]),
-					min: -100,
-					max: 100
-				},
-				{
 					type: "float",
 					label: "temporal reprojection alpha",
 					name: "temporalAlpha",

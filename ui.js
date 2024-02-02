@@ -11,6 +11,7 @@ const htmlByType = {
 					step="1"
 					min="${fieldDesc.min || 0}"
 					max="${fieldDesc.max || 10}"
+					title="${fieldDesc.min || 0} to ${fieldDesc.max || 10}"
 					data-apply-on-restart="${fieldDesc.applyOnRestart || false}" />
 			</label>
 		</div>`
@@ -29,6 +30,7 @@ const htmlByType = {
 					step="0.01"
 					min="${fieldDesc.min || 0}"
 					max="${fieldDesc.max || 1}"
+					title="${fieldDesc.min || 0} to ${fieldDesc.max || 10}"
 					data-apply-on-restart="${fieldDesc.applyOnRestart || false}" />
 			</label>
 		</div>`
@@ -248,7 +250,17 @@ export class UI
 	_onInput(e)
 	{
 		const name = e.currentTarget.name;
-		const value = parseFloat(e.currentTarget.value);
+		const min = parseFloat(e.currentTarget.min);
+		const max = parseFloat(e.currentTarget.max);
+		let parsedVal = parseFloat(e.currentTarget.value);
+		let value = min;
+
+		if (!Number.isNaN(parsedVal))
+		{
+			value = Math.min(max, Math.max(min, parsedVal));
+		}
+
+		e.currentTarget.value = value;
 		const applyOnRestart = e.currentTarget.dataset.applyOnRestart === "true";
 		this._runEventHandlers("input", {name, value, applyOnRestart});
 	}
