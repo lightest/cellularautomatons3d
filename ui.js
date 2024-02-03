@@ -103,7 +103,14 @@ export class UI
 		for (let i = 0; i < inputs.length; i++)
 		{
 			inputs[i].classList.remove("restart-required");
-			inputs[i].title = "";
+			if (inputs[i].type === "number")
+			{
+				inputs[i].title = `${inputs[i].min} to ${inputs[i].max}`;
+			}
+			else
+			{
+				inputs[i].title = "";
+			}
 		}
 	}
 
@@ -192,43 +199,6 @@ export class UI
 		}
 	}
 
-	_onPointermove(e)
-	{
-		this._runEventHandlers("pointermove", e);
-	}
-
-	_onPointerdown(e)
-	{
-		this.drawing = true;
-		this._runEventHandlers("pointerdown", e);
-	}
-
-	_onPointerup(e)
-	{
-		this.drawing = false;
-		this._runEventHandlers("pointerup", e);
-	}
-
-	_onKeydown(e)
-	{
-		if (e.key === "c" && e.ctrlKey)
-		{
-			console.log("ctrl+c")
-			this._runEventHandlers("ctrl+c", e);
-		}
-
-		if (e.key === "v" && e.ctrlKey)
-		{
-			console.log("ctrl+v");
-			this._runEventHandlers("ctrl+v", e);
-		}
-
-		if (e.key === "x" && e.ctrlKey)
-		{
-			this._runEventHandlers("ctrl+x", e);
-		}
-	}
-
 	_onMousemove(e)
 	{
 		const bcr = e.currentTarget.getBoundingClientRect();
@@ -306,10 +276,6 @@ export class UI
 
 	_addEventListeners()
 	{
-		// window.addEventListener("pointerdown", (e) => { this._onPointerdown(e); });
-		// window.addEventListener("pointermove", (e) => { this._onPointermove(e); });
-		// window.addEventListener("pointerup", (e) => { this._onPointerup(e); });
-		// window.addEventListener("keydown", this._onKeydown.bind(this));
 		this._uiBodyDOM.addEventListener("mousemove", this._onMousemove);
 		this._uiBodyDOM.addEventListener("mouseleave", this._onMouseleave);
 		this._uiBodyDOM.addEventListener("wheel", this._stopEventPropagation);

@@ -135,21 +135,22 @@ fn compute_main (@builtin(global_invocation_id) invId: vec3u)
 	// 0-6/1,3/2/VN
 	if(cellStateIn[cellIdx] == 1 && activeNeighboursAmount <= 6)
 	{
-		// Survives
+		// Survives.
 		cellStateOut[cellIdx] = 1;
 	}
 	else if (cellStateIn[cellIdx] == 0 && (activeNeighboursAmount == 1 || activeNeighboursAmount == 3))
 	{
-		// Born
+		// Born.
 		cellStateOut[cellIdx] = 1;
 	}
 	else if (cellStateIn[cellIdx] == 1)
 	{
-		// Dead
+		// Dead.
 		cellStateOut[cellIdx] = 0;
 	}
 	else
 	{
+		// Carry on.
 		cellStateOut[cellIdx] = cellStateIn[cellIdx];
 	}
 }

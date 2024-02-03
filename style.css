@@ -71,7 +71,9 @@ body {
 
 .ui-input input[type="checkbox"]
 {
-
+	height: 35px;
+	margin: 0;
+	margin-left: auto;
 }
 
 .ui-input input.restart-required {

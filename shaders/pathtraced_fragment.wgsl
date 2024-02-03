@@ -35,7 +35,8 @@ struct CommonBufferLayout {
 	elapsedTime: f32,
 	depthSamples: f32,
 	shadowSamples: f32,
-	cellSize: f32
+	cellSize: f32,
+	showDepthBuffer: f32
 };
 
 struct VertexOut {
@@ -704,7 +705,7 @@ fn fragment_main(fragData: VertexOut) -> ShaderOut
 	// out = vec4f(vec3f(uCommonUniformsBuffer.data.f0, 0, 0), 1.0f);
 
 
-	if (fragData.vUv.x < 0.5f && fragData.vUv.y < 0.5f)
+	if (uCommonUniformsBuffer.showDepthBuffer == 1.0f && fragData.vUv.x < 0.5f)
 	{
 		out = vec4f(mixedDepth.r, 0, 0, 1);
 	}

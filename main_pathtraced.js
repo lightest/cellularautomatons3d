@@ -31,6 +31,7 @@ class MainModule
 		this._shadowSampels = 10;
 		this._cellSize = 0.85;
 		this._animateLight = false;
+		this._showDepthOverlay = false;
 		this._computeStepDurationMS = 16; // Amount of ms to hold one frame of simulation for.
 
 		this._lightSource =
@@ -180,7 +181,7 @@ class MainModule
 				},
 				{
 					type: "integer",
-					label: "sim step duration [ms]",
+					label: "sim step duration (ms)",
 					name: "_computeStepDurationMS",
 					value: this._computeStepDurationMS,
 					min: 16,
@@ -191,6 +192,12 @@ class MainModule
 					label: "animate light",
 					name: "_animateLight",
 					value: this._animateLight
+				},
+				{
+					type: "boolean",
+					label: "show depth overlay",
+					name: "_showDepthOverlay",
+					value: this._showDepthOverlay
 				},
 			],
 
@@ -225,10 +232,12 @@ class MainModule
 		this._depthRaySamplesIndex = MemoryManager.allocf32(1);
 		this._shadowRaySamplesIndex = MemoryManager.allocf32(1);
 		this._cellSizeIndex = MemoryManager.allocf32(1);
+		this._showDepthOverlayIndex = MemoryManager.allocf32(1);
 		MemoryManager.writef32(this._windowSizeIndex, this._canvas.width, this._canvas.height);
 		MemoryManager.writef32(this._depthRaySamplesIndex, this._depthSamples);
 		MemoryManager.writef32(this._shadowRaySamplesIndex, this._shadowSampels);
 		MemoryManager.writef32(this._cellSizeIndex, this._cellSize);
+		MemoryManager.writef32(this._showDepthOverlayIndex, this._showDepthOverlay);
 	}
 
 	_updatePerspectiveMatrix()
@@ -1182,6 +1191,7 @@ class MainModule
 		MemoryManager.writef32(this._depthRaySamplesIndex, this._depthSamples);
 		MemoryManager.writef32(this._shadowRaySamplesIndex, this._shadowSampels);
 		MemoryManager.writef32(this._cellSizeIndex, this._cellSize);
+		MemoryManager.writef32(this._showDepthOverlayIndex, this._showDepthOverlay);
 	}
 
 	_renderPass(commandEncoder)
