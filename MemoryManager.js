@@ -21,7 +21,7 @@ export function allocf32(size = 0)
 	const memoryStart = nextIdx;
 	nextIdx = Math.min(nextIdx + size, bufferf32.length);
 
-	console.log("CPU uniforms f32 memory nextIdx", nextIdx);
+	console.log("CPU uniforms f32 memory nextIdx / total", nextIdx, bufferf32.length);
 
 	return memoryStart;
 }

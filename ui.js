@@ -71,6 +71,23 @@ const htmlByType = {
 				</label>
 			</div>`
 		);
+	},
+
+	"select": (fieldDesc) =>
+	{
+		const optionsHTML = (fieldDesc.options.map(o => `<option value="${o}">${o}</option>`)).join("");
+
+		console.log(optionsHTML);
+
+		return (
+			`<div class="ui-input">
+				<label><div class="caption">${fieldDesc.label}:</div>
+					<select name="${fieldDesc.name}"
+					data-apply-on-restart="${fieldDesc.applyOnRestart || false}" >
+					${optionsHTML}</select>
+				</label>
+			</div>`
+		);
 	}
 };
 
@@ -99,6 +116,7 @@ export class UI
 	resetUIElementsStates()
 	{
 		const inputs = this._uiBodyDOM.querySelectorAll("input");
+		const selects = this._uiBodyDOM.querySelectorAll("select");
 
 		for (let i = 0; i < inputs.length; i++)
 		{
@@ -111,6 +129,12 @@ export class UI
 			{
 				inputs[i].title = "";
 			}
+		}
+
+		for (let i = 0; i < selects.length; i++)
+		{
+			selects[i].classList.remove("restart-required");
+			selects[i].title = "";
 		}
 	}
 
@@ -191,11 +215,11 @@ export class UI
 
 	markSimRestartRequired(fieldName)
 	{
-		const inputField = this._uiBodyDOM.querySelector(`[name="${fieldName}"]`);
-		if (inputField)
+		const uiField = this._uiBodyDOM.querySelector(`[name="${fieldName}"]`);
+		if (uiField)
 		{
-			inputField.classList.add("restart-required");
-			inputField.title = "RESTART REQUIRED!";
+			uiField.classList.add("restart-required");
+			uiField.title = "RESTART SIM REQUIRED!";
 		}
 	}
 
@@ -235,11 +259,19 @@ export class UI
 		this._runEventHandlers("input", {name, value, applyOnRestart});
 	}
 
-	_onChange(e)
+	_onCheckboxChange(e)
 	{
 		const name = e.currentTarget.name;
 		const value = e.currentTarget.checked;
 		this._runEventHandlers("change", {name, value});
+	}
+
+	_onSelectChange(e)
+	{
+		const name = e.currentTarget.name;
+		const value = e.currentTarget.value;
+		const applyOnRestart = e.currentTarget.dataset.applyOnRestart === "true";
+		this._runEventHandlers("change", {name, value, applyOnRestart});
 	}
 
 	_onClick(e)
@@ -253,7 +285,7 @@ export class UI
 		const inputs = this._uiBodyDOM.querySelectorAll("input");
 		const buttons = this._uiBodyDOM.querySelectorAll(".ui-button");
 		const bindedInputHandler = this._onInput.bind(this);
-		const bindedChangeHandler = this._onChange.bind(this);
+		const bindedChangeHandler = this._onCheckboxChange.bind(this);
 		const buttonClickHandler = this._onClick.bind(this);
 
 		for (let i = 0; i < inputs.length; i++)
@@ -274,6 +306,17 @@ export class UI
 		}
 	}
 
+	_addSelectEventListeners()
+	{
+		const selects = this._uiBodyDOM.querySelectorAll("select");
+		const bindedSelectChangeHandler = this._onSelectChange.bind(this);
+
+		for (let i = 0; i < selects.length; i++)
+		{
+			selects[i].addEventListener("change", bindedSelectChangeHandler);
+		}
+	}
+
 	_addEventListeners()
 	{
 		this._uiBodyDOM.addEventListener("mousemove", this._onMousemove);
@@ -281,6 +324,7 @@ export class UI
 		this._uiBodyDOM.addEventListener("wheel", this._stopEventPropagation);
 		this._uiBodyDOM.addEventListener("keydown", this._stopEventPropagation);
 		this._addInputEventListeners();
+		this._addSelectEventListeners();
 	}
 
 	_removeEventListeners()

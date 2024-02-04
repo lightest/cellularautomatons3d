@@ -31,12 +31,14 @@ class MainModule
 		this._shadowSampels = 10;
 		this._cellSize = 0.85;
 		this._animateLight = false;
+		this._lightPositionDistance = 2;
 		this._showDepthOverlay = false;
 		this._computeStepDurationMS = 16; // Amount of ms to hold one frame of simulation for.
+		this._neighbourhood = "von neumann";
 
 		this._lightSource =
 		{
-			x: 0.35, y: 1.5, z: 0,
+			x: 0.35, y: this._lightPositionDistance, z: 0,
 			magnitude: 2,
 			_bufferIndex: MemoryManager.allocf32(4),
 
@@ -134,10 +136,10 @@ class MainModule
 					type: "integer",
 					label: "grid size",
 					name: "_gridSize",
-					applyOnRestart: true,
 					value: this._gridSize,
 					min: 3,
-					max: 256
+					max: 256,
+					applyOnRestart: true,
 				},
 				{
 					type: "float",
@@ -146,6 +148,14 @@ class MainModule
 					value: this._cellSize,
 					min: .01,
 					max: .9
+				},
+				{
+					type: "select",
+					label: "neighbourhood",
+					name: "_neighbourhood",
+					options: ["von neumann", "moore"],
+					value: this._neighbourhood,
+					applyOnRestart: true
 				},
 				{
 					type: "integer",
@@ -173,7 +183,7 @@ class MainModule
 				},
 				{
 					type: "float",
-					label: "light manitude",
+					label: "light magnitude",
 					name: "_lightSource.magnitude",
 					value: this._lightSource.magnitude,
 					min: 0,
@@ -317,9 +327,14 @@ class MainModule
 	// TODO: replace?
 	_onUIChange(e)
 	{
-		if(this[e.name] !== undefined)
+		if (e.applyOnRestart)
 		{
-			this[e.name] = e.value;
+			this._ui.markSimRestartRequired(e.name);
+			this._toApplyOnSimRestart.push(e);
+		}
+		else
+		{
+			this._setValue(e.name, e.value);
 		}
 	}
 
@@ -1180,8 +1195,8 @@ class MainModule
 	{
 		if (this._animateLight)
 		{
-			this._lightSource.y = Math.sin(performance.now() * .0007) * 2;
-			this._lightSource.x = Math.cos(performance.now() * .0007) * 2;
+			this._lightSource.y = Math.sin(performance.now() * .0007) * this._lightPositionDistance;
+			this._lightSource.x = Math.cos(performance.now() * .0007) * this._lightPositionDistance;
 		}
 		this._lightSource.update();
 	}
