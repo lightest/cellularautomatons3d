@@ -12,14 +12,6 @@ canvas {
 	position: absolute;
 }
 
-.selection-area {
-	position: fixed;
-	top: 0;
-	left: 0;
-	border: 1px solid cyan;
-	background: rgba(0, 255, 255, .5);
-}
-
 .ui-container {
 	position: fixed;
 	top: 30px;
@@ -102,8 +94,8 @@ canvas {
 
 .ui-input select option {
 	background: black;
-	outline: none;
-	border: none;
+	outline: transparent;
+	border: transparent;
 }
 
 .ui-input input.restart-required, .ui-input select.restart-required {

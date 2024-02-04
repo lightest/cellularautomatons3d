@@ -7,6 +7,11 @@ const TRANSLATION_SPEED = .15;
 const MIN_TRANSLATION_SPEED_MUL = .01;
 const MAX_TRANSLATION_SPEED_MUL = 100;
 
+const NEIGHBOURHOOD_MAP = {
+	"von neumann": 0,
+	"moore": 1
+};
+
 class MainModule
 {
 	constructor()
@@ -33,13 +38,13 @@ class MainModule
 		this._animateLight = false;
 		this._lightPositionDistance = 2;
 		this._showDepthOverlay = false;
-		this._computeStepDurationMS = 16; // Amount of ms to hold one frame of simulation for.
+		this._computeStepDurationMS = 48; // Amount of ms to hold one frame of simulation for.
 		this._neighbourhood = "von neumann";
 
 		this._lightSource =
 		{
 			x: 0.35, y: this._lightPositionDistance, z: 0,
-			magnitude: 2,
+			magnitude: 3,
 			_bufferIndex: MemoryManager.allocf32(4),
 
 			update()
@@ -902,12 +907,10 @@ class MainModule
 		// TODO: Should this be a separate func?
 		const shaderSources = await this._getShaderSources();
 		const computeShaderSources = await this._getComputeShaderSources();
+
 		const vertexShaderModule = this._device.createShaderModule({ code: shaderSources.vertexSrc });
 		const fragmentShaderModule = this._device.createShaderModule({ code: shaderSources.fragmentSrc });
-
-		const computeShaderModule = this._device.createShaderModule({
-			code: computeShaderSources
-		});
+		const computeShaderModule = this._device.createShaderModule({ code: computeShaderSources });
 
 		const renderPipelineLayout = this._device.createPipelineLayout({
 			bindGroupLayouts: [...Object.values(this._bindGroupLayouts)]
