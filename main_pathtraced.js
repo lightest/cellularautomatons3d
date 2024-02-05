@@ -12,6 +12,26 @@ const NEIGHBOURHOOD_MAP = {
 	"moore": 1
 };
 
+// Von Neumann.
+const vnNeighbourhood = new Int32Array(
+	[
+		1, 0, 0,  -1, 0, 0,
+		0, 1, 0,  0, -1, 0,
+		0, 0, 1,  0, 0, -1
+	]
+);
+
+// const mooreNeighbourhood = new Int32Array(
+// 	[
+// 		1, 0, 0,  -1, 0, 0,
+// 		0, 1, 0,  0, -1, 0,
+// 		0, 0, 1,  0, 0, -1,
+// 		1, 1, 0,  -1, 1, 0,
+// 		1, -1, 0, -1, -1, 0
+
+// 	]
+// );
+
 class MainModule
 {
 	constructor()
@@ -66,6 +86,7 @@ class MainModule
 		};
 
 		this._uniformBuffers = {};
+		this._storageBuffers = {};
 		this._cellStorageBuffers = [];
 		this._resolutionDependentAssets = {};
 		this._commonBindGroup = undefined;
@@ -128,6 +149,7 @@ class MainModule
 		this._setupCommonBindGroup();
 		this._setupTextureResourcesBindGroups();
 		this._setupCellStorageBindGroups();
+		this._setupAutomatonRulesBindGroup();
 		await this._setupPipelines();
 		this._setupRenderPassDescriptor();
 		// this._handleResize();
@@ -863,6 +885,11 @@ class MainModule
 			this._cellStorageBuffers[i].destroy();
 		}
 
+		for (let i in this._storageBuffers)
+		{
+			this._storageBuffers[i].destroy();
+		}
+
 		const cellStateData = new Uint32Array(this._gridSize * this._gridSize * this._gridSize);
 
 		// Sets initial state.
@@ -883,10 +910,20 @@ class MainModule
 			})
 		];
 
+		const vnNeighbourhoodBuffer = this._device.createBuffer({
+			label: "vn neighbourhood buffer",
+			size: vnNeighbourhood.byteLength,
+			usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST
+		});
+		this._device.queue.writeBuffer(vnNeighbourhoodBuffer, 0, vnNeighbourhood);
+
 		this._device.queue.writeBuffer(cellStorageBuffers[0], 0, cellStateData);
 		this._device.queue.writeBuffer(cellStorageBuffers[1], 0, cellStateData);
 
 		this._cellStorageBuffers = cellStorageBuffers;
+		this._storageBuffers = {
+			vnNeighbourhoodBuffer
+		};
 
 		return cellStorageBuffers;
 	}
@@ -895,6 +932,7 @@ class MainModule
 	{
 		this._setupStorageBuffers();
 		this._setupCellStorageBindGroups();
+		this._setupAutomatonRulesBindGroup();
 	}
 
 	async _setupPipelines()
@@ -908,7 +946,11 @@ class MainModule
 		const computeShaderModule = this._device.createShaderModule({ code: computeShaderSources });
 
 		const renderPipelineLayout = this._device.createPipelineLayout({
-			bindGroupLayouts: [...Object.values(this._bindGroupLayouts)]
+			bindGroupLayouts: [
+				this._bindGroupLayouts.mainLayout,
+				this._bindGroupLayouts.samplersBindGroupLayout,
+				this._bindGroupLayouts.cellStorageBindGroupLayout
+			]
 		});
 
 		const buffersLayout = [
@@ -976,7 +1018,8 @@ class MainModule
 				bindGroupLayouts:
 				[
 					this._bindGroupLayouts.mainLayout,
-					this._bindGroupLayouts.cellStorageBindGroupLayout
+					this._bindGroupLayouts.cellStorageBindGroupLayout,
+					this._bindGroupLayouts.automatonRulesLayout
 				]
 			}),
 			compute: {
@@ -1113,6 +1156,33 @@ class MainModule
 		});
 	}
 
+	_setupAutomatonRulesBindGroup()
+	{
+		const automatonRulesLayout = this._device.createBindGroupLayout({
+			label: "automaton_rules_layout",
+			entries: [
+				{
+					binding: 0,
+					visibility: GPUShaderStage.COMPUTE,
+					buffer: { type: "read-only-storage" }
+				}
+			]
+		});
+
+		this._bindGroupLayouts.automatonRulesLayout = automatonRulesLayout;
+
+		this._automatonRulesBindGroup = this._device.createBindGroup({
+			label: "automatons_bind_group",
+			layout: automatonRulesLayout,
+			entries: [
+				{
+					binding: 0,
+					resource: { buffer: this._storageBuffers.vnNeighbourhoodBuffer }
+				}
+			]
+		});
+	}
+
 	_setupCommonBindGroup ()
 	{
 		const uniformBuffers = this._uniformBuffers;
@@ -1235,6 +1305,7 @@ class MainModule
 		computePassEncoder.setPipeline(this._computePipeline);
 		computePassEncoder.setBindGroup(0, this._commonBindGroup);
 		computePassEncoder.setBindGroup(1, this._cellStatesBindGroups[this._simulationStep % 2]);
+		computePassEncoder.setBindGroup(2, this._automatonRulesBindGroup);
 		const workGroupCount = Math.ceil(this._gridSize / WORK_GROUP_SIZE);
 		computePassEncoder.dispatchWorkgroups(workGroupCount, workGroupCount, workGroupCount);
 		computePassEncoder.end();

@@ -3,6 +3,9 @@
 @group(1) @binding(0) var<storage> cellStateIn: array<u32>;
 @group(1) @binding(1) var<storage, read_write> cellStateOut: array<u32>;
 
+// @group(2) @binding(0) var<storage> uVnNeighbourhood: array<vec3i>;
+@group(2) @binding(0) var<storage> uVnNeighbourhood: array<i32>;
+
 
 const vnNeighbourhood = array<vec3i, 6>(vec3i(0, 0, 1), vec3i(0, 0, -1), vec3i(1, 0, 0), vec3i(-1, 0, 0), vec3i(0, 1, 0), vec3i(0, -1, 0));
 
@@ -21,14 +24,21 @@ fn getCellIdx(cellCoords: vec3u) -> u32
 
 fn calcActiveNeighbours(curCell: vec3u) -> u32
 {
-	var i: i32 = 0;
+	var i: u32 = 0;
 	var activeNeighboursAmount: u32 = 0;
 	var neighbourCellIdx: u32 = 0;
-	// let arrSize = arrayLength(&cellStateIn);
+	let arrSize = arrayLength(&uVnNeighbourhood);
 
-	for (i = 0; i < 6; i++)
+	// for (i = 0; i < arrSize; i++)
+	// {
+	// 	neighbourCellIdx = getCellIdx(vec3u(vec3i(curCell) + uVnNeighbourhood[i]));
+	// 	activeNeighboursAmount = activeNeighboursAmount + cellStateIn[ neighbourCellIdx ];
+	// }
+
+	for (i = 0; i < arrSize; i = i + 3)
 	{
-		neighbourCellIdx = getCellIdx(vec3u(vec3i(curCell) + vnNeighbourhood[i]));
+		let n = vec3i(uVnNeighbourhood[i], uVnNeighbourhood[i + 1], uVnNeighbourhood[i + 2]);
+		neighbourCellIdx = getCellIdx(vec3u(vec3i(curCell) + n));
 		activeNeighboursAmount = activeNeighboursAmount + cellStateIn[ neighbourCellIdx ];
 	}
 
