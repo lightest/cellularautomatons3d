@@ -1,59 +1,45 @@
-@group(0) @binding(0) var<uniform> colsRows: vec3f;
+@group(0) @binding(0) var<uniform> uGridSize: vec3f;
 
 @group(1) @binding(0) var<storage> cellStateIn: array<u32>;
 @group(1) @binding(1) var<storage, read_write> cellStateOut: array<u32>;
 
 
-// fn getCellIdx (xIn: u32, yIn: u32) -> u32
-// {
-// 	var x = xIn;
-// 	var y = yIn;
-// 	let u32Cols = u32(colsRows.x);
-// 	let u32Rows = u32(colsRows.y);
+const vnNeighbourhood = array<vec3i, 6>(vec3i(0, 0, 1), vec3i(0, 0, -1), vec3i(1, 0, 0), vec3i(-1, 0, 0), vec3i(0, 1, 0), vec3i(0, -1, 0));
 
-// 	// TODO: how to have this without if statements?
-// 	if (x < 0)
-// 	{
-// 		x = u32Cols + x;
-// 	}
-// 	if (y < 0)
-// 	{
-// 		y = u32Rows + y;
-// 	}
-// 	return (x % u32Cols) + (y % u32Rows) * u32Cols;
-// }
-
-fn getCellIdx(xIn: u32, yIn: u32, zIn: u32) -> u32
+fn getCellIdx(cellCoords: vec3u) -> u32
 {
-	var x = xIn;
-	var y = yIn;
-	var z = zIn;
-	let u32Cols = u32(colsRows.x);
-	let u32Rows = u32(colsRows.y);
-	let u32Depth = u32(colsRows.z);
-	let layerSize = u32(colsRows.x * colsRows.y);
+	let u32Cols = u32(uGridSize.x);
+	let u32Rows = u32(uGridSize.y);
+	let u32Depth = u32(uGridSize.z);
+	let layerSize = u32(uGridSize.x * uGridSize.y);
 
-	// TODO: how to have this without if statements?
-	if (x < 0)
+	// In case of power of 2 grid size having u32 cellCoorinates automatically takes care of overflow.
+	// If the value casted to u32 was -1, it becomes max u32, being power of 2 itself it perfectly cycles with modulo.
+
+	return (cellCoords.x % u32Cols) + (cellCoords.y % u32Rows) * u32Cols + (cellCoords.z % u32Depth) * layerSize;
+}
+
+fn calcActiveNeighbours(curCell: vec3u) -> u32
+{
+	var i: i32 = 0;
+	var activeNeighboursAmount: u32 = 0;
+	var neighbourCellIdx: u32 = 0;
+	// let arrSize = arrayLength(&cellStateIn);
+
+	for (i = 0; i < 6; i++)
 	{
-		x = u32Cols + x;
+		neighbourCellIdx = getCellIdx(vec3u(vec3i(curCell) + vnNeighbourhood[i]));
+		activeNeighboursAmount = activeNeighboursAmount + cellStateIn[ neighbourCellIdx ];
 	}
-	if (y < 0)
-	{
-		y = u32Rows + y;
-	}
-	if (z < 0)
-	{
-		z = u32Depth + z;
-	}
-	return (x % u32Cols) + (y % u32Rows) * u32Cols + (z % u32Depth) * layerSize;
+
+	return activeNeighboursAmount;
 }
 
 @compute
 @workgroup_size(4, 4, 4)
 fn compute_main (@builtin(global_invocation_id) invId: vec3u)
 {
-	let cellIdx = getCellIdx(invId.x, invId.y, invId.z);
+	let cellIdx = getCellIdx(invId);
 
 	// Moore
 	// let activeNeighboursAmount =
@@ -89,17 +75,19 @@ fn compute_main (@builtin(global_invocation_id) invId: vec3u)
 	// cellStateIn[ getCellIdx(invId.x + 1, invId.y + 1, invId.z + 1) ];
 
 	// Von Neiman
-	let activeNeighboursAmount =
-	cellStateIn[ getCellIdx(invId.x - 1, invId.y, invId.z) ] +
-	cellStateIn[ getCellIdx(invId.x + 1, invId.y, invId.z) ] +
-	cellStateIn[ getCellIdx(invId.x, invId.y - 1, invId.z) ] +
-	cellStateIn[ getCellIdx(invId.x, invId.y + 1, invId.z) ] +
+	// let activeNeighboursAmount =
+	// cellStateIn[ getCellIdx(invId.x - 1, invId.y, invId.z) ] +
+	// cellStateIn[ getCellIdx(invId.x + 1, invId.y, invId.z) ] +
+	// cellStateIn[ getCellIdx(invId.x, invId.y - 1, invId.z) ] +
+	// cellStateIn[ getCellIdx(invId.x, invId.y + 1, invId.z) ] +
 
-	// Back
-	cellStateIn[ getCellIdx(invId.x, invId.y, invId.z - 1) ] +
+	// // Back
+	// cellStateIn[ getCellIdx(invId.x, invId.y, invId.z - 1) ] +
 
-	// Front
-	cellStateIn[ getCellIdx(invId.x, invId.y, invId.z + 1) ];
+	// // Front
+	// cellStateIn[ getCellIdx(invId.x, invId.y, invId.z + 1) ];
+
+	let activeNeighboursAmount = calcActiveNeighbours(invId);
 
 	// Conway's game of life rules:
 	// if (cellStateIn[cellIdx] == 1 && (activeNeighboursAmount < 2 || activeNeighboursAmount > 3))

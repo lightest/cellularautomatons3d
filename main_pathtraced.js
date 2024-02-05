@@ -33,7 +33,7 @@ class MainModule
 		this._prevProjViewMatInv = undefined;
 		this._translationSpeedMul = .2;
 		this._depthSamples = 25;
-		this._shadowSampels = 10;
+		this._shadowSampels = 20;
 		this._cellSize = 0.85;
 		this._animateLight = false;
 		this._lightPositionDistance = 2;
@@ -893,11 +893,6 @@ class MainModule
 
 	_resetStorageBuffers()
 	{
-		// const cellStateData = new Uint32Array(this._gridSize * this._gridSize * this._gridSize);
-		// const center = Math.floor(this._gridSize * .5);
-		// cellStateData[this._getCellIdx3D(center, center, center)] = 1;
-		// this._device.queue.writeBuffer(this._cellStorageBuffers[0], 0, cellStateData);
-		// this._device.queue.writeBuffer(this._cellStorageBuffers[1], 0, cellStateData);
 		this._setupStorageBuffers();
 		this._setupCellStorageBindGroups();
 	}

@@ -7,17 +7,6 @@
 
 @group(2) @binding(0) var<storage> cellStates: array<u32>;
 
-struct TestStruct {
-	f0: vec3f,
-	f1: vec3f
-}
-
-struct TestStruct2
-{
-	f1: vec3f,
-	f0: f32
-}
-
 struct LightSource {
 	pos: vec3f,
 	magnitude: f32

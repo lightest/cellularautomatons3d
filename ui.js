@@ -30,7 +30,7 @@ const htmlByType = {
 					step="0.01"
 					min="${fieldDesc.min || 0}"
 					max="${fieldDesc.max || 1}"
-					title="${fieldDesc.min || 0} to ${fieldDesc.max || 10}"
+					title="${fieldDesc.min || 0} to ${fieldDesc.max || 1}"
 					data-apply-on-restart="${fieldDesc.applyOnRestart || false}" />
 			</label>
 		</div>`
