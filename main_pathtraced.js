@@ -7,11 +7,6 @@ const TRANSLATION_SPEED = .15;
 const MIN_TRANSLATION_SPEED_MUL = .01;
 const MAX_TRANSLATION_SPEED_MUL = 100;
 
-const NEIGHBOURHOOD_MAP = {
-	"von neumann": 0,
-	"moore": 1
-};
-
 // Von Neumann.
 const vnNeighbourhood = new Int32Array(
 	[
@@ -21,16 +16,35 @@ const vnNeighbourhood = new Int32Array(
 	]
 );
 
-// const mooreNeighbourhood = new Int32Array(
-// 	[
-// 		1, 0, 0,  -1, 0, 0,
-// 		0, 1, 0,  0, -1, 0,
-// 		0, 0, 1,  0, 0, -1,
-// 		1, 1, 0,  -1, 1, 0,
-// 		1, -1, 0, -1, -1, 0
+// Moore.
+const mooreNeighbourhood = new Int32Array(
+	[
+		// Middle layer, surrounding the cell.
+		1, 0, 0,  -1, 0, 0,
+		0, 1, 0,  0, -1, 0,
+		1, 1, 0,  -1, 1, 0,
+		1, -1, 0, -1, -1, 0,
 
-// 	]
-// );
+		// Front layer.
+		1, 0, 1,  -1, 0, 1,
+		0, 1, 1,  0, -1, 1,
+		1, 1, 1,  -1, 1, 1,
+		1, -1, 1, -1, -1, 1,
+		0, 0, 1,
+
+		// Back layer.
+		1, 0, -1,  -1, 0, -1,
+		0, 1, -1,  0, -1, -1,
+		1, 1, -1,  -1, 1, -1,
+		1, -1, -1, -1, -1, -1,
+		0, 0, -1,
+	]
+);
+
+const NEIGHBOURHOOD_MAP = {
+	"von neumann": vnNeighbourhood,
+	"moore": mooreNeighbourhood
+};
 
 class MainModule
 {
@@ -910,19 +924,21 @@ class MainModule
 			})
 		];
 
-		const vnNeighbourhoodBuffer = this._device.createBuffer({
-			label: "vn neighbourhood buffer",
-			size: vnNeighbourhood.byteLength,
+		const neighbourhoodOffsets = NEIGHBOURHOOD_MAP[this._neighbourhood];
+		const neighbourhoodBuffer = this._device.createBuffer({
+			label: "neighbourhood buffer",
+			size: neighbourhoodOffsets.byteLength,
 			usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST
 		});
-		this._device.queue.writeBuffer(vnNeighbourhoodBuffer, 0, vnNeighbourhood);
 
 		this._device.queue.writeBuffer(cellStorageBuffers[0], 0, cellStateData);
 		this._device.queue.writeBuffer(cellStorageBuffers[1], 0, cellStateData);
+		this._device.queue.writeBuffer(neighbourhoodBuffer, 0, neighbourhoodOffsets);
 
+		// TODO: unify?
 		this._cellStorageBuffers = cellStorageBuffers;
 		this._storageBuffers = {
-			vnNeighbourhoodBuffer
+			neighbourhoodBuffer
 		};
 
 		return cellStorageBuffers;
@@ -1177,7 +1193,7 @@ class MainModule
 			entries: [
 				{
 					binding: 0,
-					resource: { buffer: this._storageBuffers.vnNeighbourhoodBuffer }
+					resource: { buffer: this._storageBuffers.neighbourhoodBuffer }
 				}
 			]
 		});

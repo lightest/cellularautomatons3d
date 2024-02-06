@@ -3,11 +3,13 @@
 @group(1) @binding(0) var<storage> cellStateIn: array<u32>;
 @group(1) @binding(1) var<storage, read_write> cellStateOut: array<u32>;
 
-// @group(2) @binding(0) var<storage> uVnNeighbourhood: array<vec3i>;
-@group(2) @binding(0) var<storage> uVnNeighbourhood: array<i32>;
+// In order to pass arrays of <vec3i> you have to account for data type alignment.
+// In case of <vec3i> it's going to be 16 bytes, not 12.
+// So underlying buffer should have 4 elements per vector instead of 3 to be read correctly...
+// Obvuously this is bullshit, so we're passing flat array of <i32>
+// and iterate over it keeping in mind it's <vec3i> is what we packed there.
+@group(2) @binding(0) var<storage> uNeighbourhoodOffsets: array<i32>;
 
-
-const vnNeighbourhood = array<vec3i, 6>(vec3i(0, 0, 1), vec3i(0, 0, -1), vec3i(1, 0, 0), vec3i(-1, 0, 0), vec3i(0, 1, 0), vec3i(0, -1, 0));
 
 fn getCellIdx(cellCoords: vec3u) -> u32
 {
@@ -27,19 +29,15 @@ fn calcActiveNeighbours(curCell: vec3u) -> u32
 	var i: u32 = 0;
 	var activeNeighboursAmount: u32 = 0;
 	var neighbourCellIdx: u32 = 0;
-	let arrSize = arrayLength(&uVnNeighbourhood);
+	var neighbourhoodOffset: vec3i;
+	let curCell_v3i = vec3i(curCell);
+	let arrSize = arrayLength(&uNeighbourhoodOffsets);
 
-	// for (i = 0; i < arrSize; i++)
-	// {
-	// 	neighbourCellIdx = getCellIdx(vec3u(vec3i(curCell) + uVnNeighbourhood[i]));
-	// 	activeNeighboursAmount = activeNeighboursAmount + cellStateIn[ neighbourCellIdx ];
-	// }
-
-	for (i = 0; i < arrSize; i = i + 3)
+	for (i = 0; i < arrSize; i += 3)
 	{
-		let n = vec3i(uVnNeighbourhood[i], uVnNeighbourhood[i + 1], uVnNeighbourhood[i + 2]);
-		neighbourCellIdx = getCellIdx(vec3u(vec3i(curCell) + n));
-		activeNeighboursAmount = activeNeighboursAmount + cellStateIn[ neighbourCellIdx ];
+		neighbourhoodOffset = vec3i(uNeighbourhoodOffsets[i], uNeighbourhoodOffsets[i + 1], uNeighbourhoodOffsets[i + 2]);
+		neighbourCellIdx = getCellIdx(vec3u(curCell_v3i + neighbourhoodOffset));
+		activeNeighboursAmount += cellStateIn[ neighbourCellIdx ];
 	}
 
 	return activeNeighboursAmount;
