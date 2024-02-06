@@ -8,7 +8,13 @@
 // So underlying buffer should have 4 elements per vector instead of 3 to be read correctly...
 // Obvuously this is bullshit, so we're passing flat array of <i32>
 // and iterate over it keeping in mind it's <vec3i> is what we packed there.
-@group(2) @binding(0) var<storage> uNeighbourhoodOffsets: array<i32>;
+@group(2) @binding(0) var<storage> sNeighbourhoodOffsets: array<i32>;
+
+// Passing rules as separate arrays instead of struct,
+// because current wgsl allows run-time size arrays to be only last member of struct.
+// Since we need 2 of these, we'll need 2 structs, which is pointless here.
+@group(2) @binding(1) var<storage> sSurviveRules: array<u32>;
+@group(2) @binding(2) var<storage> sBornRules: array<u32>;
 
 
 fn getCellIdx(cellCoords: vec3u) -> u32
@@ -31,11 +37,11 @@ fn calcActiveNeighbours(curCell: vec3u) -> u32
 	var neighbourCellIdx: u32 = 0;
 	var neighbourhoodOffset: vec3i;
 	let curCell_v3i = vec3i(curCell);
-	let arrSize = arrayLength(&uNeighbourhoodOffsets);
+	let arrSize = arrayLength(&sNeighbourhoodOffsets);
 
 	for (i = 0; i < arrSize; i += 3)
 	{
-		neighbourhoodOffset = vec3i(uNeighbourhoodOffsets[i], uNeighbourhoodOffsets[i + 1], uNeighbourhoodOffsets[i + 2]);
+		neighbourhoodOffset = vec3i(sNeighbourhoodOffsets[i], sNeighbourhoodOffsets[i + 1], sNeighbourhoodOffsets[i + 2]);
 		neighbourCellIdx = getCellIdx(vec3u(curCell_v3i + neighbourhoodOffset));
 		activeNeighboursAmount += cellStateIn[ neighbourCellIdx ];
 	}

@@ -88,6 +88,22 @@ const htmlByType = {
 				</label>
 			</div>`
 		);
+	},
+
+	"text": (fieldDesc) =>
+	{
+		return(
+			`<div class="ui-input">
+				<label><div class="caption">${fieldDesc.label}:</div>
+					<input
+						type="text"
+						name="${fieldDesc.name}"
+						value="${fieldDesc.value}"
+						title="${fieldDesc.title || ""}"
+						data-apply-on-restart="${fieldDesc.applyOnRestart || false}" />
+				</label>
+			</div>`
+		);
 	}
 };
 
@@ -96,6 +112,7 @@ export class UI
 	constructor(cfg)
 	{
 		this._cfg = cfg;
+		this._uiElements = {};
 		this._uiBodyDOM = undefined;
 		this._handlers = {};
 		this.drawing = false;
@@ -107,6 +124,7 @@ export class UI
 
 	setUIElements(data)
 	{
+		this._uiElements = data;
 		const html = this._buildUIHTML(data);
 		document.body.insertAdjacentHTML("beforeend", html);
 		this._uiBodyDOM = document.querySelector(".ui-body");
@@ -127,7 +145,16 @@ export class UI
 			}
 			else
 			{
-				inputs[i].title = "";
+				// TODO: add a hashmap by name for faster search if needed.
+				const existingFieldDesc = this._uiElements.fields.find(field => field.name === inputs[i].name);
+				if (existingFieldDesc)
+				{
+					inputs[i].title = existingFieldDesc.title || "";
+				}
+				else
+				{
+					inputs[i].title = "";
+				}
 			}
 		}
 
@@ -241,7 +268,7 @@ export class UI
 		e.stopPropagation();
 	}
 
-	_onInput(e)
+	_onNumericInput(e)
 	{
 		const name = e.currentTarget.name;
 		const min = parseFloat(e.currentTarget.min);
@@ -257,6 +284,14 @@ export class UI
 		e.currentTarget.value = value;
 		const applyOnRestart = e.currentTarget.dataset.applyOnRestart === "true";
 		this._runEventHandlers("input", {name, value, applyOnRestart});
+	}
+
+	_onTextInput(e)
+	{
+		const name = e.currentTarget.name;
+		const value = e.currentTarget.value;
+		const applyOnRestart = e.currentTarget.dataset.applyOnRestart === "true";
+		this._runEventHandlers("input", { name, value, applyOnRestart });
 	}
 
 	_onCheckboxChange(e)
@@ -284,7 +319,8 @@ export class UI
 	{
 		const inputs = this._uiBodyDOM.querySelectorAll("input");
 		const buttons = this._uiBodyDOM.querySelectorAll(".ui-button");
-		const bindedInputHandler = this._onInput.bind(this);
+		const bindedNumericInputHandler = this._onNumericInput.bind(this);
+		const bindedTextInputHandler = this._onTextInput.bind(this);
 		const bindedChangeHandler = this._onCheckboxChange.bind(this);
 		const buttonClickHandler = this._onClick.bind(this);
 
@@ -292,7 +328,11 @@ export class UI
 		{
 			if (inputs[i].type === "number")
 			{
-				inputs[i].addEventListener("input", bindedInputHandler);
+				inputs[i].addEventListener("input", bindedNumericInputHandler);
+			}
+			else if (inputs[i].type === "text")
+			{
+				inputs[i].addEventListener("input", bindedTextInputHandler);
 			}
 			else if (inputs[i].type === "checkbox")
 			{

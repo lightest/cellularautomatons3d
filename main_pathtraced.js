@@ -74,6 +74,7 @@ class MainModule
 		this._showDepthOverlay = false;
 		this._computeStepDurationMS = 48; // Amount of ms to hold one frame of simulation for.
 		this._neighbourhood = "von neumann";
+		this._ruleString = "0-6/1,3/2";
 
 		this._lightSource =
 		{
@@ -196,6 +197,14 @@ class MainModule
 					name: "_neighbourhood",
 					options: ["von neumann", "moore"],
 					value: this._neighbourhood,
+					applyOnRestart: true
+				},
+				{
+					type: "text",
+					label: "rules",
+					name: "_ruleString",
+					value: this._ruleString,
+					title: "SURVIVE/BORN/TOTAL STATES",
 					applyOnRestart: true
 				},
 				{
@@ -340,6 +349,21 @@ class MainModule
 		}
 	}
 
+	_composeValuesArrayFromRangeString(rangeString)
+	{
+		const rangeStringComponents = rangeString.split(",");
+	}
+
+	_parseRuleString(ruleString)
+	{
+		const rulesComponents = ruleString.split("/");
+		const survive = rulesComponents[0];
+		const born = rulesComponents[1];
+		const totalStates = rulesComponents[2];
+
+		console.log(survive, born, totalStates);
+	}
+
 	_restartSim()
 	{
 		for (let i = 0; i < this._toApplyOnSimRestart.length; i++)
@@ -347,6 +371,7 @@ class MainModule
 			const data = this._toApplyOnSimRestart[i];
 			this._setValue(data.name, data.value);
 		}
+		this._parseRuleString(this._ruleString);
 		this._resetStorageBuffers();
 		this._device.queue.writeBuffer(this._uniformBuffers.gridDimensionsBuffer, 0, new Float32Array([this._gridSize, this._gridSize, this._gridSize]));
 		this._ui.resetUIElementsStates();

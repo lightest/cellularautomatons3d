@@ -62,7 +62,7 @@ canvas {
 	margin-left: auto;
 }
 
-.ui-input input[type="number"]
+.ui-input input[type="number"], .ui-input input[type="text"]
 {
 	color: white;
 	font-size: 16px;
