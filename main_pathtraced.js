@@ -76,7 +76,10 @@ class MainModule
 		this._showDepthOverlay = false;
 		this._computeStepDurationMS = 48; // Amount of ms to hold one frame of simulation for.
 		this._neighbourhood = "von neumann";
-		this._rulesString = "0-6/1,3/2";
+		this._bornRulesString = "1,3";
+		this._surviveRulesString = "0-6";
+		this._totalStates = 2;
+		this._randomInitialState = false;
 
 		// 26 is the maximum possible amount of neighbours to consider: 9 in front of the cell, 9 in the back and 8 around.
 		// 27 is to cover the last index.
@@ -127,7 +130,7 @@ class MainModule
 
 	async init()
 	{
-		this._recalculateRulesVlues(this._rulesString);
+		this._recalculateRulesVlues(this._bornRulesString, this._surviveRulesString);
 		this._viewMat = mat4.lookAt(
 			this._eyeVector,
 			this._target,
@@ -209,10 +212,18 @@ class MainModule
 				},
 				{
 					type: "text",
-					label: "rules",
-					name: "_rulesString",
-					value: this._rulesString,
-					title: "SURVIVE/BORN/TOTAL STATES",
+					label: "born rules",
+					name: "_bornRulesString",
+					value: this._bornRulesString,
+					title: "BORN RULES",
+					applyOnRestart: true
+				},
+				{
+					type: "text",
+					label: "survive rules",
+					name: "_surviveRulesString",
+					value: this._surviveRulesString,
+					title: "SURVIVE RULES",
 					applyOnRestart: true
 				},
 				{
@@ -254,6 +265,12 @@ class MainModule
 					value: this._computeStepDurationMS,
 					min: 16,
 					max: 3000
+				},
+				{
+					type: "boolean",
+					label: "random initial state",
+					name: "_randomInitialState",
+					value: this._randomInitialState
 				},
 				{
 					type: "boolean",
@@ -385,30 +402,25 @@ class MainModule
 		return result;
 	}
 
-	_recalculateRulesVlues(ruleString)
+	_recalculateRulesVlues(bornRulesString, surviveRulesString)
 	{
-		const rulesComponents = ruleString.split("/");
-		const survive = rulesComponents[0];
-		const born = rulesComponents[1];
-		const totalStates = rulesComponents[2];
+		const bornValues = this._rulesComponentsToValues(bornRulesString);
+		const surviveValues = this._rulesComponentsToValues(surviveRulesString);
 
-		const surviveValues = this._rulesComponentsToValues(survive);
-		const bornValues = this._rulesComponentsToValues(born);
-
-		this._surviveRulesValues.fill(0);
 		this._bornRulesValues.fill(0);
-
-		for (let i = 0; i < surviveValues.length; i++)
-		{
-			this._surviveRulesValues[surviveValues[i]] = 1;
-		}
+		this._surviveRulesValues.fill(0);
 
 		for (let i = 0; i < bornValues.length; i++)
 		{
 			this._bornRulesValues[bornValues[i]] = 1;
 		}
 
-		console.log(surviveValues, bornValues, totalStates);
+		for (let i = 0; i < surviveValues.length; i++)
+		{
+			this._surviveRulesValues[surviveValues[i]] = 1;
+		}
+
+		console.log(surviveValues, bornValues, this._totalStates);
 		console.log(this._surviveRulesValues, this._bornRulesValues);
 	}
 
@@ -419,7 +431,7 @@ class MainModule
 			const data = this._toApplyOnSimRestart[i];
 			this._setValue(data.name, data.value);
 		}
-		this._recalculateRulesVlues(this._rulesString);
+		this._recalculateRulesVlues(this._bornRulesString, this._surviveRulesString);
 		this._resetStorageBuffers();
 		this._device.queue.writeBuffer(this._uniformBuffers.gridDimensionsBuffer, 0, new Float32Array([this._gridSize, this._gridSize, this._gridSize]));
 		this._ui.resetUIElementsStates();
@@ -978,6 +990,16 @@ class MainModule
 		}
 
 		const cellStateData = new Uint32Array(this._gridSize * this._gridSize * this._gridSize);
+
+		if (this._randomInitialState)
+		{
+			let i = 0;
+			for (i = 0; i < cellStateData.length; i++)
+			{
+				cellStateData[i] = Math.random() > .5;
+			}
+		}
+
 		// 2,6,9/4,6,8-9/2
 		// Sets initial state.
 		const center = Math.floor(this._gridSize * .5);

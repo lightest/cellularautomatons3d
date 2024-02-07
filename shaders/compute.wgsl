@@ -155,7 +155,7 @@ fn compute_main (@builtin(global_invocation_id) invId: vec3u)
 	// }
 
 	// Preliminary carry over previous state.
-	cellStateOut[cellIdx] = cellStateIn[cellIdx];
+	// cellStateOut[cellIdx] = cellStateIn[cellIdx];
 
 	// TODO: this should be possible to write as one-liner. Figure out how.
 	if(cellStateIn[cellIdx] == 1 && sSurviveRules[activeNeighboursAmount] > 0)
