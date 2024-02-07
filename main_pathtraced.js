@@ -46,6 +46,8 @@ const NEIGHBOURHOOD_MAP = {
 	"moore": mooreNeighbourhood
 };
 
+console.log(NEIGHBOURHOOD_MAP["von neumann"].byteLength, NEIGHBOURHOOD_MAP["moore"].byteLength);
+
 class MainModule
 {
 	constructor()
@@ -74,7 +76,12 @@ class MainModule
 		this._showDepthOverlay = false;
 		this._computeStepDurationMS = 48; // Amount of ms to hold one frame of simulation for.
 		this._neighbourhood = "von neumann";
-		this._ruleString = "0-6/1,3/2";
+		this._rulesString = "0-6/1,3/2";
+
+		// 26 is the maximum possible amount of neighbours to consider: 9 in front of the cell, 9 in the back and 8 around.
+		// 27 is to cover the last index.
+		this._surviveRulesValues = new Uint32Array(27);
+		this._bornRulesValues = new Uint32Array(27);
 
 		this._lightSource =
 		{
@@ -120,6 +127,7 @@ class MainModule
 
 	async init()
 	{
+		this._recalculateRulesVlues(this._rulesString);
 		this._viewMat = mat4.lookAt(
 			this._eyeVector,
 			this._target,
@@ -202,8 +210,8 @@ class MainModule
 				{
 					type: "text",
 					label: "rules",
-					name: "_ruleString",
-					value: this._ruleString,
+					name: "_rulesString",
+					value: this._rulesString,
 					title: "SURVIVE/BORN/TOTAL STATES",
 					applyOnRestart: true
 				},
@@ -349,19 +357,59 @@ class MainModule
 		}
 	}
 
-	_composeValuesArrayFromRangeString(rangeString)
+	_rulesComponentsToValues(rulesComponents)
 	{
-		const rangeStringComponents = rangeString.split(",");
+		const result = [];
+		const components = rulesComponents.split(",");
+		for (let i = 0; i < components.length; i++)
+		{
+			if (components[i].indexOf("-") > -1)
+			{
+				const range = components[i].split("-");
+				const start = parseInt(range[0], 10);
+				const end = parseInt(range[1], 10);
+
+				for (let j = start; j <= end; j++)
+				{
+					result.push(Math.min(j, 26));
+				}
+			}
+			else
+			{
+				result.push(
+					Math.min(parseInt(components[i], 10), 26)
+				);
+			}
+		}
+
+		return result;
 	}
 
-	_parseRuleString(ruleString)
+	_recalculateRulesVlues(ruleString)
 	{
 		const rulesComponents = ruleString.split("/");
 		const survive = rulesComponents[0];
 		const born = rulesComponents[1];
 		const totalStates = rulesComponents[2];
 
-		console.log(survive, born, totalStates);
+		const surviveValues = this._rulesComponentsToValues(survive);
+		const bornValues = this._rulesComponentsToValues(born);
+
+		this._surviveRulesValues.fill(0);
+		this._bornRulesValues.fill(0);
+
+		for (let i = 0; i < surviveValues.length; i++)
+		{
+			this._surviveRulesValues[surviveValues[i]] = 1;
+		}
+
+		for (let i = 0; i < bornValues.length; i++)
+		{
+			this._bornRulesValues[bornValues[i]] = 1;
+		}
+
+		console.log(surviveValues, bornValues, totalStates);
+		console.log(this._surviveRulesValues, this._bornRulesValues);
 	}
 
 	_restartSim()
@@ -371,7 +419,7 @@ class MainModule
 			const data = this._toApplyOnSimRestart[i];
 			this._setValue(data.name, data.value);
 		}
-		this._parseRuleString(this._ruleString);
+		this._recalculateRulesVlues(this._rulesString);
 		this._resetStorageBuffers();
 		this._device.queue.writeBuffer(this._uniformBuffers.gridDimensionsBuffer, 0, new Float32Array([this._gridSize, this._gridSize, this._gridSize]));
 		this._ui.resetUIElementsStates();
@@ -930,10 +978,34 @@ class MainModule
 		}
 
 		const cellStateData = new Uint32Array(this._gridSize * this._gridSize * this._gridSize);
-
+		// 2,6,9/4,6,8-9/2
 		// Sets initial state.
 		const center = Math.floor(this._gridSize * .5);
 		cellStateData[this._getCellIdx3D(center, center, center)] = 1;
+		// cellStateData[this._getCellIdx3D(center + 1, center, center)] = 1;
+		// cellStateData[this._getCellIdx3D(center - 1, center, center)] = 1;
+		// cellStateData[this._getCellIdx3D(center, center + 1, center)] = 1;
+		// cellStateData[this._getCellIdx3D(center, center - 1, center)] = 1;
+		// cellStateData[this._getCellIdx3D(center, center, center + 1)] = 1;
+		// cellStateData[this._getCellIdx3D(center, center, center - 1)] = 1;
+		// cellStateData[this._getCellIdx3D(center + 1, center, center + 1)] = 1;
+		// cellStateData[this._getCellIdx3D(center - 1, center, center + 1)] = 1;
+		// cellStateData[this._getCellIdx3D(center, center + 1, center + 1)] = 1;
+		// cellStateData[this._getCellIdx3D(center, center - 1, center + 1)] = 1;
+		// cellStateData[this._getCellIdx3D(center + 1, center + 1, center + 1)] = 1;
+		// cellStateData[this._getCellIdx3D(center - 1, center + 1, center + 1)] = 1;
+		// cellStateData[this._getCellIdx3D(center + 1, center - 1, center + 1)] = 1;
+		// cellStateData[this._getCellIdx3D(center - 1, center - 1, center + 1)] = 1;
+
+		// cellStateData[this._getCellIdx3D(center + 1, center, center - 1)] = 1;
+		// cellStateData[this._getCellIdx3D(center - 1, center, center - 1)] = 1;
+		// cellStateData[this._getCellIdx3D(center, center + 1, center - 1)] = 1;
+		// cellStateData[this._getCellIdx3D(center, center - 1, center - 1)] = 1;
+		// cellStateData[this._getCellIdx3D(center + 1, center + 1, center - 1)] = 1;
+		// cellStateData[this._getCellIdx3D(center - 1, center + 1, center - 1)] = 1;
+		// cellStateData[this._getCellIdx3D(center + 1, center - 1, center - 1)] = 1;
+		// cellStateData[this._getCellIdx3D(center - 1, center - 1, center - 1)] = 1;
+
 
 		const cellStorageBuffers = [
 			this._device.createBuffer({
@@ -956,14 +1028,30 @@ class MainModule
 			usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST
 		});
 
+		const surviveRulesBuffer = this._device.createBuffer({
+			label: "survive rules buffer",
+			size: this._surviveRulesValues.byteLength,
+			usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST
+		});
+
+		const bornRulesBuffer = this._device.createBuffer({
+			label: "born rules buffer",
+			size: this._bornRulesValues.byteLength,
+			usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST
+		});
+
 		this._device.queue.writeBuffer(cellStorageBuffers[0], 0, cellStateData);
 		this._device.queue.writeBuffer(cellStorageBuffers[1], 0, cellStateData);
 		this._device.queue.writeBuffer(neighbourhoodBuffer, 0, neighbourhoodOffsets);
+		this._device.queue.writeBuffer(surviveRulesBuffer, 0, this._surviveRulesValues);
+		this._device.queue.writeBuffer(bornRulesBuffer, 0, this._bornRulesValues);
 
 		// TODO: unify?
 		this._cellStorageBuffers = cellStorageBuffers;
 		this._storageBuffers = {
-			neighbourhoodBuffer
+			neighbourhoodBuffer,
+			surviveRulesBuffer,
+			bornRulesBuffer
 		};
 
 		return cellStorageBuffers;
@@ -1206,6 +1294,16 @@ class MainModule
 					binding: 0,
 					visibility: GPUShaderStage.COMPUTE,
 					buffer: { type: "read-only-storage" }
+				},
+				{
+					binding: 1,
+					visibility: GPUShaderStage.COMPUTE,
+					buffer: { type: "read-only-storage" }
+				},
+				{
+					binding: 2,
+					visibility: GPUShaderStage.COMPUTE,
+					buffer: { type: "read-only-storage" }
 				}
 			]
 		});
@@ -1219,6 +1317,14 @@ class MainModule
 				{
 					binding: 0,
 					resource: { buffer: this._storageBuffers.neighbourhoodBuffer }
+				},
+				{
+					binding: 1,
+					resource: { buffer: this._storageBuffers.surviveRulesBuffer }
+				},
+				{
+					binding: 2,
+					resource: { buffer: this._storageBuffers.bornRulesBuffer }
 				}
 			]
 		});

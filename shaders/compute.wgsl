@@ -10,9 +10,7 @@
 // and iterate over it keeping in mind it's <vec3i> is what we packed there.
 @group(2) @binding(0) var<storage> sNeighbourhoodOffsets: array<i32>;
 
-// Passing rules as separate arrays instead of struct,
-// because current wgsl allows run-time size arrays to be only last member of struct.
-// Since we need 2 of these, we'll need 2 structs, which is pointless here.
+// Using array as a hash map for fast lookup and cell survival / birth checks.
 @group(2) @binding(1) var<storage> sSurviveRules: array<u32>;
 @group(2) @binding(2) var<storage> sBornRules: array<u32>;
 
@@ -135,24 +133,44 @@ fn compute_main (@builtin(global_invocation_id) invId: vec3u)
 	// }
 
 	// 0-6/1,3/2/VN
-	if(cellStateIn[cellIdx] == 1 && activeNeighboursAmount <= 6)
+	// if(cellStateIn[cellIdx] == 1 && activeNeighboursAmount <= 6)
+	// {
+	// 	// Survives.
+	// 	cellStateOut[cellIdx] = 1;
+	// }
+	// else if (cellStateIn[cellIdx] == 0 && (activeNeighboursAmount == 1 || activeNeighboursAmount == 3))
+	// {
+	// 	// Born.
+	// 	cellStateOut[cellIdx] = 1;
+	// }
+	// else if (cellStateIn[cellIdx] == 1)
+	// {
+	// 	// Dead.
+	// 	cellStateOut[cellIdx] = 0;
+	// }
+	// else
+	// {
+	// 	// Carry on.
+	// 	cellStateOut[cellIdx] = cellStateIn[cellIdx];
+	// }
+
+	// Preliminary carry over previous state.
+	cellStateOut[cellIdx] = cellStateIn[cellIdx];
+
+	// TODO: this should be possible to write as one-liner. Figure out how.
+	if(cellStateIn[cellIdx] == 1 && sSurviveRules[activeNeighboursAmount] > 0)
 	{
 		// Survives.
 		cellStateOut[cellIdx] = 1;
 	}
-	else if (cellStateIn[cellIdx] == 0 && (activeNeighboursAmount == 1 || activeNeighboursAmount == 3))
+	else if (cellStateIn[cellIdx] == 0 && sBornRules[activeNeighboursAmount] > 0)
 	{
 		// Born.
 		cellStateOut[cellIdx] = 1;
 	}
-	else if (cellStateIn[cellIdx] == 1)
+	else
 	{
 		// Dead.
 		cellStateOut[cellIdx] = 0;
-	}
-	else
-	{
-		// Carry on.
-		cellStateOut[cellIdx] = cellStateIn[cellIdx];
 	}
 }
