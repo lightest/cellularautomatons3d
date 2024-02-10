@@ -16,6 +16,13 @@ const vnNeighbourhood = new Int32Array(
 	]
 );
 
+const vnNeighbourhood2D = new Int32Array(
+	[
+		1, 0, 0,  -1, 0, 0,
+		0, 1, 0,  0, -1, 0
+	]
+);
+
 // Moore.
 const mooreNeighbourhood = new Int32Array(
 	[
@@ -41,10 +48,23 @@ const mooreNeighbourhood = new Int32Array(
 	]
 );
 
+const mooreNeighbourhood2D = new Int32Array(
+	[
+		// Middle layer, surrounding the cell.
+		1, 0, 0,  -1, 0, 0,
+		0, 1, 0,  0, -1, 0,
+		1, 1, 0,  -1, 1, 0,
+		1, -1, 0, -1, -1, 0
+	]
+);
+
 const NEIGHBOURHOOD_MAP = {
 	"von neumann": vnNeighbourhood,
-	"moore": mooreNeighbourhood
+	"von neumann 2D": vnNeighbourhood2D,
+	"moore": mooreNeighbourhood,
+	"moore 2D": mooreNeighbourhood2D
 };
+console.log(Object.keys(NEIGHBOURHOOD_MAP))
 
 console.log(NEIGHBOURHOOD_MAP["von neumann"].byteLength, NEIGHBOURHOOD_MAP["moore"].byteLength);
 
@@ -74,10 +94,13 @@ class MainModule
 		this._animateLight = false;
 		this._lightPositionDistance = 2;
 		this._showDepthOverlay = false;
-		this._computeStepDurationMS = 48; // Amount of ms to hold one frame of simulation for.
-		this._neighbourhood = "von neumann";
-		this._bornRulesString = "1,3";
-		this._surviveRulesString = "0-6";
+		this._computeStepDurationMS = 1000; // Amount of ms to hold one frame of simulation for.
+		// this._neighbourhood = "von neumann";
+		// this._bornRulesString = "1,3";
+		// this._surviveRulesString = "0-6";
+		this._neighbourhood = "moore";
+		this._bornRulesString = "3";
+		this._surviveRulesString = "4-8";
 		this._totalStates = 2;
 		this._randomInitialState = false;
 
@@ -203,30 +226,6 @@ class MainModule
 					max: .9
 				},
 				{
-					type: "select",
-					label: "neighbourhood",
-					name: "_neighbourhood",
-					options: ["von neumann", "moore"],
-					value: this._neighbourhood,
-					applyOnRestart: true
-				},
-				{
-					type: "text",
-					label: "born rules",
-					name: "_bornRulesString",
-					value: this._bornRulesString,
-					title: "BORN RULES",
-					applyOnRestart: true
-				},
-				{
-					type: "text",
-					label: "survive rules",
-					name: "_surviveRulesString",
-					value: this._surviveRulesString,
-					title: "SURVIVE RULES",
-					applyOnRestart: true
-				},
-				{
 					type: "integer",
 					label: "depth samples",
 					name: "_depthSamples",
@@ -268,12 +267,6 @@ class MainModule
 				},
 				{
 					type: "boolean",
-					label: "random initial state",
-					name: "_randomInitialState",
-					value: this._randomInitialState
-				},
-				{
-					type: "boolean",
 					label: "animate light",
 					name: "_animateLight",
 					value: this._animateLight
@@ -283,6 +276,44 @@ class MainModule
 					label: "show depth overlay",
 					name: "_showDepthOverlay",
 					value: this._showDepthOverlay
+				},
+				{
+					type: "boolean",
+					label: "random initial state",
+					name: "_randomInitialState",
+					value: this._randomInitialState
+				},
+				{
+					type: "select",
+					label: "neighbourhood",
+					name: "_neighbourhood",
+					options: Object.keys(NEIGHBOURHOOD_MAP),
+					value: this._neighbourhood,
+					applyOnRestart: true
+				},
+				{
+					type: "text",
+					label: "born rules",
+					name: "_bornRulesString",
+					value: this._bornRulesString,
+					title: "e.g. 1,2-5,7",
+					applyOnRestart: true
+				},
+				{
+					type: "text",
+					label: "survive rules",
+					name: "_surviveRulesString",
+					value: this._surviveRulesString,
+					title: "e.g. 0-6,9",
+					applyOnRestart: true
+				},
+				{
+					type: "text",
+					label: "total states",
+					name: "_totalStates",
+					value: this._totalStates,
+					title: "TOTAL STATES",
+					applyOnRestart: true
 				},
 			],
 
@@ -377,6 +408,7 @@ class MainModule
 	_rulesComponentsToValues(rulesComponents)
 	{
 		const result = [];
+		rulesComponents = rulesComponents.replaceAll(" ", "");
 		const components = rulesComponents.split(",");
 		for (let i = 0; i < components.length; i++)
 		{
@@ -996,37 +1028,21 @@ class MainModule
 			let i = 0;
 			for (i = 0; i < cellStateData.length; i++)
 			{
-				cellStateData[i] = Math.random() > .5;
+				cellStateData[i] = Math.random() > .97;
 			}
 		}
 
 		// 2,6,9/4,6,8-9/2
 		// Sets initial state.
 		const center = Math.floor(this._gridSize * .5);
-		cellStateData[this._getCellIdx3D(center, center, center)] = 1;
-		// cellStateData[this._getCellIdx3D(center + 1, center, center)] = 1;
-		// cellStateData[this._getCellIdx3D(center - 1, center, center)] = 1;
-		// cellStateData[this._getCellIdx3D(center, center + 1, center)] = 1;
-		// cellStateData[this._getCellIdx3D(center, center - 1, center)] = 1;
-		// cellStateData[this._getCellIdx3D(center, center, center + 1)] = 1;
-		// cellStateData[this._getCellIdx3D(center, center, center - 1)] = 1;
-		// cellStateData[this._getCellIdx3D(center + 1, center, center + 1)] = 1;
-		// cellStateData[this._getCellIdx3D(center - 1, center, center + 1)] = 1;
-		// cellStateData[this._getCellIdx3D(center, center + 1, center + 1)] = 1;
-		// cellStateData[this._getCellIdx3D(center, center - 1, center + 1)] = 1;
-		// cellStateData[this._getCellIdx3D(center + 1, center + 1, center + 1)] = 1;
-		// cellStateData[this._getCellIdx3D(center - 1, center + 1, center + 1)] = 1;
-		// cellStateData[this._getCellIdx3D(center + 1, center - 1, center + 1)] = 1;
-		// cellStateData[this._getCellIdx3D(center - 1, center - 1, center + 1)] = 1;
+		// cellStateData[this._getCellIdx3D(center, center, center)] = 1;
 
-		// cellStateData[this._getCellIdx3D(center + 1, center, center - 1)] = 1;
-		// cellStateData[this._getCellIdx3D(center - 1, center, center - 1)] = 1;
-		// cellStateData[this._getCellIdx3D(center, center + 1, center - 1)] = 1;
-		// cellStateData[this._getCellIdx3D(center, center - 1, center - 1)] = 1;
-		// cellStateData[this._getCellIdx3D(center + 1, center + 1, center - 1)] = 1;
-		// cellStateData[this._getCellIdx3D(center - 1, center + 1, center - 1)] = 1;
-		// cellStateData[this._getCellIdx3D(center + 1, center - 1, center - 1)] = 1;
-		// cellStateData[this._getCellIdx3D(center - 1, center - 1, center - 1)] = 1;
+		// Glider.
+		cellStateData[this._getCellIdx3D(center, center + 1, center)] = 1;
+		cellStateData[this._getCellIdx3D(center, center - 1, center)] = 1;
+		cellStateData[this._getCellIdx3D(center + 1, center, center)] = 1;
+		// cellStateData[this._getCellIdx3D(center + 1, center - 1, center)] = 1;
+		// cellStateData[this._getCellIdx3D(center - 1, center - 1, center)] = 1;
 
 
 		const cellStorageBuffers = [

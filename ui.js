@@ -75,7 +75,9 @@ const htmlByType = {
 
 	"select": (fieldDesc) =>
 	{
-		const optionsHTML = (fieldDesc.options.map(o => `<option value="${o}">${o}</option>`)).join("");
+		const optionsHTML = (fieldDesc.options.map(
+			o => `<option value="${o}" ${o === fieldDesc.value ? "selected" : ""} >${o}</option>`
+		)).join("");
 
 		console.log(optionsHTML);
 
