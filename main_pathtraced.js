@@ -58,13 +58,27 @@ const mooreNeighbourhood2D = new Int32Array(
 	]
 );
 
+const edgeNeighbourhood = new Int32Array([
+	// Above cell.
+	1, 1, 0,  -1, 1, 0,
+	0, 1, 1,  0, 1, -1,
+
+	// Below cell.
+	1, -1, 0,  -1, -1, 0,
+	0, -1, 1,  0, -1, -1,
+
+	// Same level as cell.
+	1, 0, 1,  -1, 0, 1,
+	1, 0, -1,  -1, 0, -1,
+]);
+
 const NEIGHBOURHOOD_MAP = {
 	"von neumann": vnNeighbourhood,
 	"von neumann 2D": vnNeighbourhood2D,
 	"moore": mooreNeighbourhood,
-	"moore 2D": mooreNeighbourhood2D
+	"moore 2D": mooreNeighbourhood2D,
+	"edges": edgeNeighbourhood
 };
-console.log(Object.keys(NEIGHBOURHOOD_MAP))
 
 console.log(NEIGHBOURHOOD_MAP["von neumann"].byteLength, NEIGHBOURHOOD_MAP["moore"].byteLength);
 
@@ -73,7 +87,7 @@ class MainModule
 	constructor()
 	{
 		this._ui = new UI();
-		this._gridSize = 32;
+		this._gridSize = 64;
 		this._prevTime = performance.now();
 		this._frameDuration = 0;
 		this._simulationStep = 0;
@@ -94,7 +108,7 @@ class MainModule
 		this._animateLight = false;
 		this._lightPositionDistance = 2;
 		this._showDepthOverlay = false;
-		this._computeStepDurationMS = 1000; // Amount of ms to hold one frame of simulation for.
+		this._computeStepDurationMS = 100; // Amount of ms to hold one frame of simulation for.
 		// this._neighbourhood = "von neumann";
 		// this._bornRulesString = "1,3";
 		// this._surviveRulesString = "0-6";
@@ -102,7 +116,7 @@ class MainModule
 		this._bornRulesString = "3";
 		this._surviveRulesString = "4-8";
 		this._totalStates = 2;
-		this._randomInitialState = false;
+		this._randomInitialState = true;
 
 		// 26 is the maximum possible amount of neighbours to consider: 9 in front of the cell, 9 in the back and 8 around.
 		// 27 is to cover the last index.
@@ -1025,25 +1039,41 @@ class MainModule
 
 		if (this._randomInitialState)
 		{
-			let i = 0;
-			for (i = 0; i < cellStateData.length; i++)
+			const center = Math.floor(this._gridSize * .5);
+			let i, j, k;
+			for (i = -2; i < 3; i++)
 			{
-				cellStateData[i] = Math.random() > .97;
+				for (j = -2; j < 3; j++)
+				{
+					for (k = -2; k < 3; k++)
+					{
+						cellStateData[ this._getCellIdx3D(center + i, center + j, center + k) ] = Math.random() > .5;
+					}
+				}
 			}
+
+			// Random seed 5x5.
+
+			// Random overall.
+			// for (i = 0; i < cellStateData.length; i++)
+			// {
+			// 	cellStateData[i] = Math.random() > .957;
+			// }
 		}
+		else
+		{
+			// 2,6,9/4,6,8-9/2
+			// Sets initial state.
+			const center = Math.floor(this._gridSize * .5);
+			cellStateData[this._getCellIdx3D(center, center, center)] = 1;
 
-		// 2,6,9/4,6,8-9/2
-		// Sets initial state.
-		const center = Math.floor(this._gridSize * .5);
-		// cellStateData[this._getCellIdx3D(center, center, center)] = 1;
-
-		// Glider.
-		cellStateData[this._getCellIdx3D(center, center + 1, center)] = 1;
-		cellStateData[this._getCellIdx3D(center, center - 1, center)] = 1;
-		cellStateData[this._getCellIdx3D(center + 1, center, center)] = 1;
-		// cellStateData[this._getCellIdx3D(center + 1, center - 1, center)] = 1;
-		// cellStateData[this._getCellIdx3D(center - 1, center - 1, center)] = 1;
-
+			// Glider.
+			// cellStateData[this._getCellIdx3D(center, center + 1, center)] = 1;
+			// cellStateData[this._getCellIdx3D(center, center - 1, center)] = 1;
+			// cellStateData[this._getCellIdx3D(center + 1, center, center)] = 1;
+			// cellStateData[this._getCellIdx3D(center + 1, center - 1, center)] = 1;
+			// cellStateData[this._getCellIdx3D(center - 1, center - 1, center)] = 1;
+		}
 
 		const cellStorageBuffers = [
 			this._device.createBuffer({
