@@ -72,12 +72,23 @@ const edgeNeighbourhood = new Int32Array([
 	1, 0, -1,  -1, 0, -1,
 ]);
 
+const cornersNeighbourhood = new Int32Array([
+	// Top corners.
+	1, 1, 1,  -1, 1, 1,
+	1, 1, -1,  -1, 1, -1,
+
+	// Bottom corners.
+	1, -1, 1,  -1, -1, 1,
+	1, -1, -1,  -1, -1, -1,
+]);
+
 const NEIGHBOURHOOD_MAP = {
-	"von neumann": vnNeighbourhood,
-	"von neumann 2D": vnNeighbourhood2D,
 	"moore": mooreNeighbourhood,
 	"moore 2D": mooreNeighbourhood2D,
-	"edges": edgeNeighbourhood
+	"von neumann": vnNeighbourhood,
+	"von neumann 2D": vnNeighbourhood2D,
+	"edges": edgeNeighbourhood,
+	"corners": cornersNeighbourhood
 };
 
 console.log(NEIGHBOURHOOD_MAP["von neumann"].byteLength, NEIGHBOURHOOD_MAP["moore"].byteLength);
@@ -102,21 +113,21 @@ class MainModule
 		this._projViewMatInv = undefined;
 		this._prevProjViewMatInv = undefined;
 		this._translationSpeedMul = .2;
-		this._depthSamples = 25;
-		this._shadowSampels = 20;
+		this._depthSamples = 35;
+		this._shadowSampels = 30;
 		this._cellSize = 0.85;
 		this._animateLight = false;
 		this._lightPositionDistance = 2;
 		this._showDepthOverlay = false;
-		this._computeStepDurationMS = 100; // Amount of ms to hold one frame of simulation for.
-		// this._neighbourhood = "von neumann";
-		// this._bornRulesString = "1,3";
-		// this._surviveRulesString = "0-6";
-		this._neighbourhood = "moore";
-		this._bornRulesString = "3";
-		this._surviveRulesString = "4-8";
+		this._computeStepDurationMS = 64; // Amount of ms to hold one frame of simulation for.
+		this._neighbourhood = "von neumann";
+		this._bornRulesString = "1,3";
+		this._surviveRulesString = "0-6";
+		// this._neighbourhood = "moore";
+		// this._bornRulesString = "3";
+		// this._surviveRulesString = "4-8";
 		this._totalStates = 2;
-		this._randomInitialState = true;
+		this._randomInitialState = false;
 
 		// 26 is the maximum possible amount of neighbours to consider: 9 in front of the cell, 9 in the back and 8 around.
 		// 27 is to cover the last index.
