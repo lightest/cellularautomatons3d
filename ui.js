@@ -283,9 +283,23 @@ export class UI
 			value = Math.min(max, Math.max(min, parsedVal));
 		}
 
-		e.currentTarget.value = value;
 		const applyOnRestart = e.currentTarget.dataset.applyOnRestart === "true";
 		this._runEventHandlers("input", {name, value, applyOnRestart});
+	}
+
+	_onNumericChange(e)
+	{
+		const min = parseFloat(e.currentTarget.min);
+		const max = parseFloat(e.currentTarget.max);
+		let parsedVal = parseFloat(e.currentTarget.value);
+		let value = min;
+
+		if (!Number.isNaN(parsedVal))
+		{
+			value = Math.min(max, Math.max(min, parsedVal));
+		}
+
+		e.currentTarget.value = value;
 	}
 
 	_onTextInput(e)
@@ -322,6 +336,7 @@ export class UI
 		const inputs = this._uiBodyDOM.querySelectorAll("input");
 		const buttons = this._uiBodyDOM.querySelectorAll(".ui-button");
 		const bindedNumericInputHandler = this._onNumericInput.bind(this);
+		const bindedNumericChangeHandler = this._onNumericChange.bind(this);
 		const bindedTextInputHandler = this._onTextInput.bind(this);
 		const bindedChangeHandler = this._onCheckboxChange.bind(this);
 		const buttonClickHandler = this._onClick.bind(this);
@@ -331,6 +346,7 @@ export class UI
 			if (inputs[i].type === "number")
 			{
 				inputs[i].addEventListener("input", bindedNumericInputHandler);
+				inputs[i].addEventListener("change", bindedNumericChangeHandler);
 			}
 			else if (inputs[i].type === "text")
 			{
