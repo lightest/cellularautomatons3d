@@ -1091,7 +1091,7 @@ class MainModule
 			const z = 16;
 			const idx = x + y + z * this._gridSize;
 			console.log("MID INDEX", idx);
-			cellStateData[idx] = 1 << 16;
+			cellStateData[idx] = 1;
 			console.log("INITIAL DATA", cellStateData);
 
 			// Glider.

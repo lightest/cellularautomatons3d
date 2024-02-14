@@ -84,7 +84,7 @@ const masks = array<u32, 32>(
 	1024u,
 	2048u,
 	4096u,
-	8129u,
+	8192u,
 	16384u,
 	32768u,
 	65536u,
@@ -209,7 +209,7 @@ fn getClusterIdx(cellCoords: vec3u) -> u32
 	let u32Cols = u32(uGridSize.x) / 32u;
 	let u32Rows = u32(uGridSize.y);
 	let u32Depth = u32(uGridSize.z);
-	let layerSize = u32(uGridSize.x * uGridSize.y);
+	let layerSize = u32Cols * u32(uGridSize.y);
 	let x = cellCoords.x / 32u;
 
 	// In case of power of 2 grid size having u32 cellCoorinates automatically takes care of overflow.
@@ -222,6 +222,7 @@ fn getCellState(cellCoords: vec3u) -> u32
 {
 	let clusterIdx = getClusterIdx(cellCoords);
 	let u32Storage = cellStates[clusterIdx];
+	// return u32(u32Storage > 0);
 	let x = cellCoords.x % 32u;
 
 	return u32((u32Storage & masks[x]) > 0);
@@ -594,7 +595,6 @@ fn rayMarchDepth(start: vec3f, end: vec3f, vUv: vec2f, steps: f32) -> RayMarchOu
 		cellCoords = floor((samplePoint + HALF_CUBE_SIZE) / cellSize);
 		cellOrigin = cellCoords * cellSize + cellSize * 0.5f - HALF_CUBE_SIZE;
 		cellState = getCellState(vec3u(cellCoords));
-		// cellState = getCellState(vec3u(16, 16, 16));
 
 		if (cellState != 0)
 		{
