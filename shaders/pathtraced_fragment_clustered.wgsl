@@ -39,7 +39,6 @@ struct VertexOut {
 	@location(7) vUv: vec2f
 }
 
-
 struct RayMarchOut {
 	color: vec4f,
 	finalSamplePoint: vec3f,
@@ -48,7 +47,8 @@ struct RayMarchOut {
 
 struct CellData {
 	cellOrigin: vec3f,
-	idx: u32
+	idx: u32,
+	cellCoords: vec3u
 }
 
 struct ShaderOut {
@@ -68,6 +68,42 @@ const OCCLUSION_FACTOR: f32 = 0.095f;
 
 // TODO: replace with uniforms.
 const uCubeOrigin = vec3f(0.0f, 0.0f, 0.0f);
+
+// Extracting bit wise data from u32.
+const masks = array<u32, 32>(
+	1u,
+	2u,
+	4u,
+	8u,
+	16u,
+	32u,
+	64u,
+	128u,
+	256u,
+	512u,
+	1024u,
+	2048u,
+	4096u,
+	8129u,
+	16384u,
+	32768u,
+	65536u,
+	131072u,
+	262144u,
+	524288u,
+	1048576u,
+	2097152u,
+	4194304u,
+	8388608u,
+	16777216u,
+	33554432u,
+	67108864u,
+	134217728u,
+	268435456u,
+	536870912u,
+	1073741824u,
+	2147483648u
+);
 
 //note: uniformly distributed, normalized rand, [0;1[
 fn nrand(n: vec2f) -> f32
@@ -167,16 +203,42 @@ fn getCellIdx(cellCoords: vec3f) -> u32
 	return x + y * u32Cols + z * layerSize;
 }
 
+fn getClusterIdx(cellCoords: vec3u) -> u32
+{
+	// Dividing by 32u because we use u32 clusters (cells) in the array.
+	let u32Cols = u32(uGridSize.x) / 32u;
+	let u32Rows = u32(uGridSize.y);
+	let u32Depth = u32(uGridSize.z);
+	let layerSize = u32(uGridSize.x * uGridSize.y);
+	let x = cellCoords.x / 32u;
+
+	// In case of power of 2 grid size having u32 cellCoorinates automatically takes care of overflow.
+	// If the value casted to u32 was -1, it becomes max u32, being power of 2 itself it perfectly cycles with modulo.
+
+	return (x % u32Cols) + (cellCoords.y % u32Rows) * u32Cols + (cellCoords.z % u32Depth) * layerSize;
+}
+
+fn getCellState(cellCoords: vec3u) -> u32
+{
+	let clusterIdx = getClusterIdx(cellCoords);
+	let u32Storage = cellStates[clusterIdx];
+	let x = cellCoords.x % 32u;
+
+	return u32((u32Storage & masks[x]) > 0);
+}
+
 fn getCellFromSamplePoint(samplePoint: vec3f) -> CellData
 {
 	let cellSize = FULL_CUBE_SIZE / uGridSize;
 	let cellCoords = floor((samplePoint + HALF_CUBE_SIZE) / cellSize);
 	let cellOrigin = cellCoords * cellSize + cellSize * 0.5f - HALF_CUBE_SIZE;
-	let i = getCellIdx(cellCoords);
+	// let i = getCellIdx(cellCoords);
+	// let i = getClusterIdx(vec3u(cellCoords));
 
 	var cellData: CellData;
 	cellData.cellOrigin = cellOrigin;
-	cellData.idx = i;
+	cellData.cellCoords = vec3u(cellCoords);
+	// cellData.idx = i;
 
 	return cellData;
 }
@@ -254,7 +316,12 @@ fn mixWithReprojectedColor(currentSampleColor: vec4f, prevSampleColor: vec4f, sa
 		return currentSampleColor;
 	}
 
-	if (curCell.idx != reprojectedCell.idx)
+	// if (curCell.idx != reprojectedCell.idx)
+	// {
+	// 	return currentSampleColor;
+	// }
+
+	if (all(curCell.cellCoords != reprojectedCell.cellCoords))
 	{
 		return currentSampleColor;
 	}
@@ -514,6 +581,7 @@ fn rayMarchDepth(start: vec3f, end: vec3f, vUv: vec2f, steps: f32) -> RayMarchOu
 	let actualVisibleCubeSize = cellSize * uCellSize * 0.5f;
 	var cellCoords = vec3f(0.0f);
 	var cellOrigin = vec3f(0.0f);
+	var cellState: u32 = 0;
 
 	while(depth < marchDepth)
 	{
@@ -525,9 +593,10 @@ fn rayMarchDepth(start: vec3f, end: vec3f, vUv: vec2f, steps: f32) -> RayMarchOu
 		// TODO: improve this such that it takes into account volume's position.
 		cellCoords = floor((samplePoint + HALF_CUBE_SIZE) / cellSize);
 		cellOrigin = cellCoords * cellSize + cellSize * 0.5f - HALF_CUBE_SIZE;
-		i = getCellIdx(cellCoords);
+		cellState = getCellState(vec3u(cellCoords));
+		// cellState = getCellState(vec3u(16, 16, 16));
 
-		if (cellStates[i] == 1)
+		if (cellState != 0)
 		{
 			// If we know we're in the cell that is active, the sample point might be anywhere relatively to the visible cube within it.
 			// So we find an intersection point on the view ray and snap sample point to the cube.
@@ -582,13 +651,14 @@ fn estimateLikelyDepth(samplePoint: vec3f, prevDepth: vec2f, prevDepthReprojecte
 	let prevCell = getCellFromSamplePoint(prevSamplePoint);
 	let reprojectedCell = getCellFromSamplePoint(reprojectedSamplePoint);
 	let curCell = getCellFromSamplePoint(samplePoint);
+	let reprojectedCellState = getCellState(reprojectedCell.cellCoords);
 
 	// Compare current sample of depth with what we had on the previous frame, reprojected to new samplePoint.
 	// Using reprojected depth, we obtain a cell and check if it's alive.
 	// If what we hit on this frame is not the same cell, we overstepped the cell either on this frame or on previous.
 	// If reprojected depth from previous frame is closer, we likely overstepped this frame.
 	// Thus we run cube intersection check for the cell derrived using reprojected depth to get an accurate result.
-	if (cellStates[reprojectedCell.idx] == 1 && curCell.idx != reprojectedCell.idx && prevDepthRe < currentDepth)
+	if (reprojectedCellState == 1 && all(curCell.cellCoords != reprojectedCell.cellCoords) && prevDepthRe < currentDepth)
 	{
 		let intersectData = rayCubeIntersect(cameraPos, viewRay, reprojectedCell.cellOrigin, actualVisibleCubeSize);
 		if (intersectData.x <= intersectData.y && intersectData.x >= 0)
