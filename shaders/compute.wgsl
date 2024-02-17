@@ -14,7 +14,6 @@
 @group(2) @binding(1) var<storage> sSurviveRules: array<u32>;
 @group(2) @binding(2) var<storage> sBornRules: array<u32>;
 
-
 fn getCellIdx(cellCoords: vec3u) -> u32
 {
 	let u32Cols = u32(uGridSize.x);

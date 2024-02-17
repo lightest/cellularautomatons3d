@@ -4,7 +4,7 @@ import { vec3, mat4, quat } from "./libs/wgpu-matrix.module.js";
 
 const WORK_GROUP_SIZE = 4;
 const TRANSLATION_SPEED = .15;
-const MIN_TRANSLATION_SPEED_MUL = .01;
+const MIN_TRANSLATION_SPEED_MUL = .001;
 const MAX_TRANSLATION_SPEED_MUL = 100;
 
 // Von Neumann.
@@ -119,7 +119,7 @@ class MainModule
 		this._animateLight = false;
 		this._lightPositionDistance = 2;
 		this._showDepthOverlay = false;
-		this._computeStepDurationMS = 64; // Amount of ms to hold one frame of simulation for.
+		this._computeStepDurationMS = 48; // Amount of ms to hold one frame of simulation for.
 		this._neighbourhood = "von neumann";
 		this._bornRulesString = "1,3";
 		this._surviveRulesString = "0-6";
@@ -239,7 +239,7 @@ class MainModule
 					name: "_gridSize",
 					value: this._gridSize,
 					min: 3,
-					max: 256,
+					max: 1024,
 					applyOnRestart: true,
 				},
 				{
@@ -488,6 +488,8 @@ class MainModule
 			const data = this._toApplyOnSimRestart[i];
 			this._setValue(data.name, data.value);
 		}
+		this._simulationStep = 0;
+		this._frameDuration = 0;
 		this._recalculateRulesVlues(this._bornRulesString, this._surviveRulesString);
 		this._resetStorageBuffers();
 		this._device.queue.writeBuffer(this._uniformBuffers.gridDimensionsBuffer, 0, new Float32Array([this._gridSize, this._gridSize, this._gridSize]));
@@ -533,7 +535,7 @@ class MainModule
 	{
 		let vertexSrc = await fetch("./shaders/pathtraced_vertex.wgsl");
 		vertexSrc = await vertexSrc.text();
-		let fragmentSrc = await fetch("./shaders/pathtraced_fragment.wgsl");
+		let fragmentSrc = await fetch("./shaders/pathtraced_fragment_clustered.wgsl");
 		fragmentSrc = await fragmentSrc.text();
 
 		return {
@@ -544,7 +546,8 @@ class MainModule
 
 	async _getComputeShaderSources ()
 	{
-		let computeSrc = await fetch("./shaders/compute.wgsl");
+		// let computeSrc = await fetch("./shaders/compute.wgsl");
+		let computeSrc = await fetch("./shaders/compute_clustered.wgsl");
 		computeSrc = await computeSrc.text();
 
 		return computeSrc;
@@ -669,6 +672,11 @@ class MainModule
 
 		// Applying mouse input on mouse event instead of update loop yields better results.
 		this._applyMouseInput();
+	}
+
+	_handleCanvasPointerdown(e)
+	{
+		this._canvas.requestPointerLock();
 	}
 
 	_applyKeyboardInputUI(e)
@@ -1046,7 +1054,8 @@ class MainModule
 			this._storageBuffers[i].destroy();
 		}
 
-		const cellStateData = new Uint32Array(this._gridSize * this._gridSize * this._gridSize);
+		// Dividing by 32 since we store data as bits within uint32 cells.
+		const cellStateData = new Uint32Array((this._gridSize / 32) * this._gridSize * this._gridSize);
 
 		if (this._randomInitialState)
 		{
@@ -1075,8 +1084,19 @@ class MainModule
 		{
 			// 2,6,9/4,6,8-9/2
 			// Sets initial state.
-			const center = Math.floor(this._gridSize * .5);
-			cellStateData[this._getCellIdx3D(center, center, center)] = 1;
+			// const center = Math.floor(this._gridSize * .5);
+			// cellStateData[this._getCellIdx3D(center, center, center)] = 1;
+
+			// TODO: tmp hardcode
+			const c = this._gridSize / 32;
+			const x = Math.floor(Math.floor(this._gridSize * .5) / 32) - 1;
+			const y = Math.floor(this._gridSize * .5) - 1;
+			const z = Math.floor(this._gridSize * .5) - 1;
+			const idx = x + y * c + z * this._gridSize * c;
+			console.log("MID INDEX", idx);
+			cellStateData[idx] = 1 << (this._gridSize * .5 - 1);
+			// cellStateData[16] = 65535;
+			console.log("INITIAL DATA", cellStateData);
 
 			// Glider.
 			// cellStateData[this._getCellIdx3D(center, center + 1, center)] = 1;
@@ -1526,15 +1546,17 @@ class MainModule
 
 	_computePass(commandEncoder)
 	{
-		this._simulationStep++;
 		const computePassEncoder = commandEncoder.beginComputePass();
 		computePassEncoder.setPipeline(this._computePipeline);
 		computePassEncoder.setBindGroup(0, this._commonBindGroup);
 		computePassEncoder.setBindGroup(1, this._cellStatesBindGroups[this._simulationStep % 2]);
 		computePassEncoder.setBindGroup(2, this._automatonRulesBindGroup);
+
+		// TODO: ensure to validate workGroupCount with this._adapter.limits.
 		const workGroupCount = Math.ceil(this._gridSize / WORK_GROUP_SIZE);
-		computePassEncoder.dispatchWorkgroups(workGroupCount, workGroupCount, workGroupCount);
+		computePassEncoder.dispatchWorkgroups(this._gridSize / 32, workGroupCount, workGroupCount);
 		computePassEncoder.end();
+		this._simulationStep++;
 	}
 
 	_addEventListeners()
@@ -1544,6 +1566,7 @@ class MainModule
 		window.addEventListener("keyup", this._handleKeyup.bind(this));
 		window.addEventListener("wheel", this._handleWheel.bind(this));
 		window.addEventListener("mousemove", this._handleMouseMove.bind(this));
+		this._canvas.addEventListener("pointerdown", this._handleCanvasPointerdown.bind(this));
 	}
 
 	_updateLoop ()
