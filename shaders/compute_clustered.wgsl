@@ -50,7 +50,7 @@ const masks = array<u32, 32>(
 	2147483648u
 );
 
-fn getClusterIdx(cellCoords: vec3u) -> u32
+fn getClusterIdxFromGridCoordinates(cellCoords: vec3u) -> u32
 {
 	// Dividing by 32u because we use u32 clusters (cells) in the array.
 	let u32Cols = u32(uGridSize.x) / 32u;
@@ -65,13 +65,26 @@ fn getClusterIdx(cellCoords: vec3u) -> u32
 	return (x % u32Cols) + (cellCoords.y % u32Rows) * u32Cols + (cellCoords.z % u32Depth) * layerSize;
 }
 
+fn getClusterIdxFromInvId(invId: vec3u) -> u32
+{
+	// Dividing by 32u because we use u32 clusters (cells) in the array.
+	let u32Cols = u32(uGridSize.x) / 32u;
+	let u32Rows = u32(uGridSize.y);
+	let u32Depth = u32(uGridSize.z);
+	let layerSize = u32Cols * u32(uGridSize.y);
+
+	// In case of power of 2 grid size having u32 cellCoorinates automatically takes care of overflow.
+	// If the value casted to u32 was -1, it becomes max u32, being power of 2 itself it perfectly cycles with modulo.
+
+	return (invId.x % u32Cols) + (invId.y % u32Rows) * u32Cols + (invId.z % u32Depth) * layerSize;
+}
+
 fn getCellState(cellCoords: vec3u) -> u32
 {
-	let clusterIdx = getClusterIdx(cellCoords);
+	let clusterIdx = getClusterIdxFromGridCoordinates(cellCoords);
 	let u32Storage = cellStateIn[clusterIdx];
-	let x = cellCoords.x % 32u;
 
-	return u32((u32Storage & masks[x]) > 0);
+	return u32((u32Storage & masks[cellCoords.x]) > 0);
 }
 
 fn calcActiveNeighbours(curCell: vec3u) -> u32
@@ -93,55 +106,108 @@ fn calcActiveNeighbours(curCell: vec3u) -> u32
 
 fn getNextCellState(currentCellState: u32, activeNeighboursAmount: u32) -> u32
 {
-	var cellState: u32 = 0;
+	var newCellState: u32 = 0;
 
 	// TODO: this should be possible to write as one-liner. Figure out how.
 	if(currentCellState == 1 && sSurviveRules[activeNeighboursAmount] > 0)
 	{
 		// Survives.
-		cellState = 1;
+		newCellState = 1;
 	}
 	else if (currentCellState == 0 && sBornRules[activeNeighboursAmount] > 0)
 	{
 		// Born.
-		cellState = 1;
+		newCellState = 1;
 	}
 	else
 	{
 		// Dead.
-		cellState = 0;
+		newCellState = 0;
 	}
 
-	return cellState;
+	return newCellState;
 }
 
-fn setNewCellState(cellCoords: vec3u, newState: u32)
+// fn setNewCellState(cellCoords: vec3u, newState: u32)
+// {
+// 	let clusterIdx = getClusterIdx(cellCoords);
+// 	let newValue: u32 = newState << (cellCoords.x % 32u);
+
+// 	// TODO: how to do it without if.
+// 	if (newState > 0)
+// 	{
+// 		cellStateOut[clusterIdx] = cellStateIn[clusterIdx] | newValue;
+// 	}
+// 	else
+// 	{
+// 		cellStateOut[clusterIdx] = cellStateIn[clusterIdx] & ~newValue;
+// 	}
+
+// 	// cellStateOut[clusterIdx] = (cellStateIn[clusterIdx] & !newValue) | newValue;
+// }
+
+fn updateU32Cluster(invId: vec3u)
 {
-	let clusterIdx = getClusterIdx(cellCoords);
-	let newValue = newState << (cellCoords.x % 32u);
+	let clusterIdx = getClusterIdxFromInvId(invId);
+	var i: u32;
+	var cellCoords = vec3u(0, invId.y, invId.z);
+	var currentCellState: u32;
+	var newCellState: u32;
+	var newValue: u32;
+	var neighbours: u32;
+	var u32Cluster = cellStateIn[clusterIdx];
 
-	// TODO: how to do it without if.
-	if (newState > 0)
+	for (i = 0; i < 31; i++)
 	{
-		cellStateOut[clusterIdx] = cellStateIn[clusterIdx] | newValue;
-	}
-	else
-	{
-		cellStateOut[clusterIdx] = cellStateIn[clusterIdx] & ~newValue;
+		cellCoords.x = i;
+		currentCellState = getCellState(cellCoords);
+		neighbours = calcActiveNeighbours(cellCoords);
+		newCellState = getNextCellState(currentCellState, neighbours);
+
+		newValue = newCellState << i;
+
+		// TODO: how to do it without if?
+		if (newCellState > 0)
+		{
+			u32Cluster = u32Cluster | newValue;
+		}
+		else
+		{
+			u32Cluster = u32Cluster & ~newValue;
+		}
 	}
 
-	// cellStateOut[clusterIdx] = (cellStateIn[clusterIdx] & !newValue) | newValue;
+	cellStateOut[clusterIdx] = u32Cluster;
+
+	// var tc = getClusterIdxFromInvId(vec3u(0, 16, 0));
+	// if (cellStateIn[tc] > 0)
+	// {
+	// 	let v = cellStateIn[tc];
+	// 	cellStateOut[tc] = v | (1 << 17);
+	// }
+
+	// if (cellStateIn[528] > 0 && clusterIdx != 528)
+	// {
+	// 	cellStateOut[clusterIdx] = 1;
+	// }
+
+	// if (clusterIdx == 528)
+	// {
+	// 	cellStateOut[528] = u32(cellStateIn[528]);
+	// }
+
+	// cellStateOut[clusterIdx] = invId.z;
+
+
+	// if (invId.x == 0)
+	// {
+	// 	cellStateOut[528] = cellStateIn[528] | (1 << 5);
+	// }
 }
 
 @compute
-@workgroup_size(4, 4, 4)
+@workgroup_size(1, 4, 4)
 fn compute_main (@builtin(global_invocation_id) invId: vec3u)
 {
-	let activeNeighboursAmount = calcActiveNeighbours(invId);
-	let newState = getNextCellState(getCellState(invId), activeNeighboursAmount);
-	setNewCellState(invId, newState);
-	// cellStateOut[clusterIdx] = cellStateIn[clusterIdx];
-	// cellStateOut[clusterIdx] = 4294967295u;
-	// cellStateOut[528] = 1u;
-	// cellStateOut[528] = 255;
+	updateU32Cluster(invId);
 }

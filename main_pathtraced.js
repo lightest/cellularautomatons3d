@@ -118,7 +118,7 @@ class MainModule
 		this._cellSize = 0.85;
 		this._animateLight = false;
 		this._lightPositionDistance = 2;
-		this._showDepthOverlay = true;
+		this._showDepthOverlay = false;
 		this._computeStepDurationMS = 48; // Amount of ms to hold one frame of simulation for.
 		this._neighbourhood = "von neumann";
 		this._bornRulesString = "1,3";
@@ -239,7 +239,7 @@ class MainModule
 					name: "_gridSize",
 					value: this._gridSize,
 					min: 3,
-					max: 256,
+					max: 1024,
 					applyOnRestart: true,
 				},
 				{
@@ -1087,11 +1087,12 @@ class MainModule
 
 			// TODO: tmp hardcode
 			const x = 0;
-			const y = 16;
-			const z = 16;
+			const y = Math.floor(this._gridSize * .5);
+			const z = Math.floor(this._gridSize * .5);
 			const idx = x + y + z * this._gridSize;
 			console.log("MID INDEX", idx);
-			cellStateData[idx] = 1;
+			cellStateData[idx] = 1 << (Math.floor(this._gridSize * .5) - 1);
+			// cellStateData[16] = 65535;
 			console.log("INITIAL DATA", cellStateData);
 
 			// Glider.
@@ -1542,7 +1543,6 @@ class MainModule
 
 	_computePass(commandEncoder)
 	{
-		this._simulationStep++;
 		const computePassEncoder = commandEncoder.beginComputePass();
 		computePassEncoder.setPipeline(this._computePipeline);
 		computePassEncoder.setBindGroup(0, this._commonBindGroup);
@@ -1551,8 +1551,9 @@ class MainModule
 
 		// TODO: ensure to validate workGroupCount with this._adapter.limits.
 		const workGroupCount = Math.ceil(this._gridSize / WORK_GROUP_SIZE);
-		computePassEncoder.dispatchWorkgroups(workGroupCount, workGroupCount, workGroupCount);
+		computePassEncoder.dispatchWorkgroups(this._gridSize / 32, workGroupCount, workGroupCount);
 		computePassEncoder.end();
+		this._simulationStep++;
 	}
 
 	_addEventListeners()
