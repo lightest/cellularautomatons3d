@@ -222,7 +222,6 @@ fn getCellState(cellCoords: vec3u) -> u32
 {
 	let clusterIdx = getClusterIdxFromGridCoordinates(cellCoords);
 	let u32Storage = cellStates[clusterIdx];
-	// return u32(u32Storage > 0);
 	let x = cellCoords.x % 32u;
 
 	return u32((u32Storage & masks[x]) > 0);

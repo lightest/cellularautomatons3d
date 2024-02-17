@@ -82,23 +82,24 @@ fn getClusterIdxFromInvId(invId: vec3u) -> u32
 fn getCellState(cellCoords: vec3u) -> u32
 {
 	let clusterIdx = getClusterIdxFromGridCoordinates(cellCoords);
-	let u32Storage = cellStateIn[clusterIdx];
+	let u32Storage: u32 = cellStateIn[clusterIdx];
+	let x: u32 = cellCoords.x % 32u;
 
-	return u32((u32Storage & masks[cellCoords.x]) > 0);
+	return u32((u32Storage & masks[x]) > 0);
 }
 
-fn calcActiveNeighbours(curCell: vec3u) -> u32
+fn calcActiveNeighbours(cellCoords: vec3u) -> u32
 {
 	var i: u32 = 0;
 	var activeNeighboursAmount: u32 = 0;
 	var neighbourhoodOffset: vec3i;
-	let curCell_v3i = vec3i(curCell);
+	let cellCoords_v3i = vec3i(cellCoords);
 	let arrSize = arrayLength(&sNeighbourhoodOffsets);
 
 	for (i = 0; i < arrSize; i += 3)
 	{
 		neighbourhoodOffset = vec3i(sNeighbourhoodOffsets[i], sNeighbourhoodOffsets[i + 1], sNeighbourhoodOffsets[i + 2]);
-		activeNeighboursAmount += getCellState(vec3u(curCell_v3i + neighbourhoodOffset));
+		activeNeighboursAmount += getCellState(vec3u(cellCoords_v3i + neighbourhoodOffset));
 	}
 
 	return activeNeighboursAmount;
@@ -156,10 +157,11 @@ fn updateU32Cluster(invId: vec3u)
 	var newValue: u32;
 	var neighbours: u32;
 	var u32Cluster = cellStateIn[clusterIdx];
+	let colOffset: u32 = invId.x * 32u;
 
-	for (i = 0; i < 31; i++)
+	for (i = 0; i < 32; i++)
 	{
-		cellCoords.x = i;
+		cellCoords.x = i + colOffset;
 		currentCellState = getCellState(cellCoords);
 		neighbours = calcActiveNeighbours(cellCoords);
 		newCellState = getNextCellState(currentCellState, neighbours);
@@ -179,29 +181,21 @@ fn updateU32Cluster(invId: vec3u)
 
 	cellStateOut[clusterIdx] = u32Cluster;
 
-	// var tc = getClusterIdxFromInvId(vec3u(0, 16, 0));
+	// var tc0 = getClusterIdxFromInvId(vec3u(0, 31, 31));
+	// var tc1 = getClusterIdxFromInvId(vec3u(1, 31, 31));
+	// // cellStateOut[tc] = 65535;
+	// // cellStateOut[tc2] = 4294901760;
+	// cellStateOut[tc0] = 1 << 31;
+	// let cs = getCellState(vec3u(31, 31, 31));
+	// if (cs > 0)
+	// {
+	// 	cellStateOut[0] = 4294901760;
+	// }
 	// if (cellStateIn[tc] > 0)
 	// {
-	// 	let v = cellStateIn[tc];
+	// 	// let v = cellStateIn[tc];
+	// 	let v = 65535u;
 	// 	cellStateOut[tc] = v | (1 << 17);
-	// }
-
-	// if (cellStateIn[528] > 0 && clusterIdx != 528)
-	// {
-	// 	cellStateOut[clusterIdx] = 1;
-	// }
-
-	// if (clusterIdx == 528)
-	// {
-	// 	cellStateOut[528] = u32(cellStateIn[528]);
-	// }
-
-	// cellStateOut[clusterIdx] = invId.z;
-
-
-	// if (invId.x == 0)
-	// {
-	// 	cellStateOut[528] = cellStateIn[528] | (1 << 5);
 	// }
 }
 

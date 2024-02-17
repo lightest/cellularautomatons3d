@@ -98,7 +98,7 @@ class MainModule
 	constructor()
 	{
 		this._ui = new UI();
-		this._gridSize = 32;
+		this._gridSize = 64;
 		this._prevTime = performance.now();
 		this._frameDuration = 0;
 		this._simulationStep = 0;
@@ -488,6 +488,8 @@ class MainModule
 			const data = this._toApplyOnSimRestart[i];
 			this._setValue(data.name, data.value);
 		}
+		this._simulationStep = 0;
+		this._frameDuration = 0;
 		this._recalculateRulesVlues(this._bornRulesString, this._surviveRulesString);
 		this._resetStorageBuffers();
 		this._device.queue.writeBuffer(this._uniformBuffers.gridDimensionsBuffer, 0, new Float32Array([this._gridSize, this._gridSize, this._gridSize]));
@@ -1086,12 +1088,13 @@ class MainModule
 			// cellStateData[this._getCellIdx3D(center, center, center)] = 1;
 
 			// TODO: tmp hardcode
-			const x = 0;
-			const y = Math.floor(this._gridSize * .5);
-			const z = Math.floor(this._gridSize * .5);
-			const idx = x + y + z * this._gridSize;
+			const c = this._gridSize / 32;
+			const x = Math.floor(Math.floor(this._gridSize * .5) / 32) - 1;
+			const y = Math.floor(this._gridSize * .5) - 1;
+			const z = Math.floor(this._gridSize * .5) - 1;
+			const idx = x + y * c + z * this._gridSize * c;
 			console.log("MID INDEX", idx);
-			cellStateData[idx] = 1 << (Math.floor(this._gridSize * .5) - 1);
+			cellStateData[idx] = 1 << (this._gridSize * .5 - 1);
 			// cellStateData[16] = 65535;
 			console.log("INITIAL DATA", cellStateData);
 
