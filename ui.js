@@ -1,6 +1,8 @@
 const htmlByType = {
 	"integer": (fieldDesc) =>
 	{
+		const title = fieldDesc.title || `${fieldDesc.min || 0} to ${fieldDesc.max || 10}`;
+
 		return(
 		`<div class="ui-input">
 			<label><div class="caption">${fieldDesc.label}:</div>
@@ -11,7 +13,7 @@ const htmlByType = {
 					step="1"
 					min="${fieldDesc.min || 0}"
 					max="${fieldDesc.max || 10}"
-					title="${fieldDesc.min || 0} to ${fieldDesc.max || 10}"
+					title="${title}"
 					data-apply-on-restart="${fieldDesc.applyOnRestart || false}" />
 			</label>
 		</div>`
@@ -20,6 +22,8 @@ const htmlByType = {
 
 	"float": (fieldDesc) =>
 	{
+		const title = fieldDesc.title || `${fieldDesc.min || 0} to ${fieldDesc.max || 10}`;
+
 		return(
 		`<div class="ui-input">
 			<label><div class="caption">${fieldDesc.label}:</div>
@@ -30,7 +34,7 @@ const htmlByType = {
 					step="0.01"
 					min="${fieldDesc.min || 0}"
 					max="${fieldDesc.max || 1}"
-					title="${fieldDesc.min || 0} to ${fieldDesc.max || 1}"
+					title="${title}"
 					data-apply-on-restart="${fieldDesc.applyOnRestart || false}" />
 			</label>
 		</div>`
@@ -78,8 +82,6 @@ const htmlByType = {
 		const optionsHTML = (fieldDesc.options.map(
 			o => `<option value="${o}" ${o === fieldDesc.value ? "selected" : ""} >${o}</option>`
 		)).join("");
-
-		console.log(optionsHTML);
 
 		return (
 			`<div class="ui-input">

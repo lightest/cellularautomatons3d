@@ -123,9 +123,9 @@ class MainModule
 		this._neighbourhood = "von neumann";
 		this._bornRulesString = "1,3";
 		this._surviveRulesString = "0-6";
-		// this._neighbourhood = "moore";
+		// this._neighbourhood = "moore 2D";
 		// this._bornRulesString = "3";
-		// this._surviveRulesString = "4-8";
+		// this._surviveRulesString = "2,3";
 		this._totalStates = 2;
 		this._randomInitialState = false;
 
@@ -240,6 +240,7 @@ class MainModule
 					value: this._gridSize,
 					min: 3,
 					max: 1024,
+					title: "multiples of 32",
 					applyOnRestart: true,
 				},
 				{
@@ -979,9 +980,11 @@ class MainModule
 
 	_getCellIdx3D(x, y, z)
 	{
+		const xGridSize = this._gridSize / 32;
+		x /= 32;
 		if (x < 0)
 		{
-			x = this._gridSize + x;
+			x = xGridSize + x;
 		}
 		if (y < 0)
 		{
@@ -991,7 +994,7 @@ class MainModule
 		{
 			z = this._gridSize + z;
 		}
-		return (x % this._gridSize) + (y % this._gridSize) * this._gridSize + (z % this._gridSize) * this._gridSize * this._gridSize;
+		return (x % xGridSize) + (y % this._gridSize) * xGridSize + (z % this._gridSize) * xGridSize * this._gridSize;
 	}
 
 	_setupIndexBuffer(data)
@@ -1098,12 +1101,19 @@ class MainModule
 			// cellStateData[16] = 65535;
 			console.log("INITIAL DATA", cellStateData);
 
+			// TODO: add setCellState function.
 			// Glider.
-			// cellStateData[this._getCellIdx3D(center, center + 1, center)] = 1;
-			// cellStateData[this._getCellIdx3D(center, center - 1, center)] = 1;
-			// cellStateData[this._getCellIdx3D(center + 1, center, center)] = 1;
-			// cellStateData[this._getCellIdx3D(center + 1, center - 1, center)] = 1;
-			// cellStateData[this._getCellIdx3D(center - 1, center - 1, center)] = 1;
+			// cellStateData[this._getCellIdx3D(x, y + 1, z)] = 1 << 31;
+			// cellStateData[this._getCellIdx3D(x, y - 1, z)] = 1 << 31;
+			// cellStateData[this._getCellIdx3D(x + 1, y, z)] = 1;
+			// cellStateData[this._getCellIdx3D(x + 1, y - 1, z)] = 1;
+			// cellStateData[this._getCellIdx3D(x - 1, y - 1, z)] = 1 << 30;
+
+			// cellStateData[this._getCellIdx3D(x, y + 1, z)] = 1 << 31;
+			// cellStateData[this._getCellIdx3D(x, y - 1, z)] = 3 << 30;
+			// cellStateData[idx + 1] = 1;
+			// cellStateData[this._getCellIdx3D(x, y - 1, z) + 1] = 1;
+			// cellStateData[this._getCellIdx3D(x, y - 1, z)] = 1 << 30;
 		}
 
 		const cellStorageBuffers = [
