@@ -129,24 +129,6 @@ fn getNextCellState(currentCellState: u32, activeNeighboursAmount: u32) -> u32
 	return newCellState;
 }
 
-// fn setNewCellState(cellCoords: vec3u, newState: u32)
-// {
-// 	let clusterIdx = getClusterIdx(cellCoords);
-// 	let newValue: u32 = newState << (cellCoords.x % 32u);
-
-// 	// TODO: how to do it without if.
-// 	if (newState > 0)
-// 	{
-// 		cellStateOut[clusterIdx] = cellStateIn[clusterIdx] | newValue;
-// 	}
-// 	else
-// 	{
-// 		cellStateOut[clusterIdx] = cellStateIn[clusterIdx] & ~newValue;
-// 	}
-
-// 	// cellStateOut[clusterIdx] = (cellStateIn[clusterIdx] & !newValue) | newValue;
-// }
-
 fn updateU32Cluster(invId: vec3u)
 {
 	let clusterIdx = getClusterIdxFromInvId(invId);
@@ -166,7 +148,7 @@ fn updateU32Cluster(invId: vec3u)
 		neighbours = calcActiveNeighbours(cellCoords);
 		newCellState = getNextCellState(currentCellState, neighbours);
 
-		newValue = newCellState << i;
+		newValue = masks[i];
 
 		// TODO: how to do it without if?
 		if (newCellState > 0)
@@ -175,7 +157,7 @@ fn updateU32Cluster(invId: vec3u)
 		}
 		else
 		{
-			u32Cluster = u32Cluster & ~newValue;
+			u32Cluster = u32Cluster & ~(newValue);
 		}
 	}
 
@@ -200,7 +182,7 @@ fn updateU32Cluster(invId: vec3u)
 }
 
 @compute
-@workgroup_size(1, 4, 4)
+@workgroup_size(1, 8, 8)
 fn compute_main (@builtin(global_invocation_id) invId: vec3u)
 {
 	updateU32Cluster(invId);

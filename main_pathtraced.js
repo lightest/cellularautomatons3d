@@ -2,7 +2,7 @@ import { UI } from "./ui.js";
 import * as MemoryManager from "./MemoryManager.js";
 import { vec3, mat4, quat } from "./libs/wgpu-matrix.module.js";
 
-const WORK_GROUP_SIZE = 4;
+const WORK_GROUP_SIZE = 8;
 const TRANSLATION_SPEED = .15;
 const MIN_TRANSLATION_SPEED_MUL = .001;
 const MAX_TRANSLATION_SPEED_MUL = 100;
