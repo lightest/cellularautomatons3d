@@ -2,7 +2,7 @@ import { UI } from "./ui.js";
 import * as MemoryManager from "./MemoryManager.js";
 import { vec3, mat4, quat } from "./libs/wgpu-matrix.module.js";
 
-const WORK_GROUP_SIZE = 8;
+const WORK_GROUP_SIZE = 16;
 const TRANSLATION_SPEED = .15;
 const MIN_TRANSLATION_SPEED_MUL = .001;
 const MAX_TRANSLATION_SPEED_MUL = 100;
@@ -128,6 +128,8 @@ class MainModule
 		// this._surviveRulesString = "2,3";
 		this._totalStates = 2;
 		this._randomInitialState = false;
+		this._temporalAlpha = 0.1;
+		this._gamma = 2.2;
 
 		// 26 is the maximum possible amount of neighbours to consider: 9 in front of the cell, 9 in the back and 8 around.
 		// 27 is to cover the last index.
@@ -270,8 +272,8 @@ class MainModule
 				{
 					type: "float",
 					label: "temporal reprojection alpha",
-					name: "temporalAlpha",
-					value: .1,
+					name: "_temporalAlpha",
+					value: this._temporalAlpha,
 					min: 0,
 					max: 1
 				},
@@ -334,13 +336,22 @@ class MainModule
 					applyOnRestart: true
 				},
 				{
-					type: "text",
-					label: "total states",
-					name: "_totalStates",
-					value: this._totalStates,
-					title: "TOTAL STATES",
-					applyOnRestart: true
+					type: "float",
+					label: "1 / gamma",
+					name: "_gamma",
+					value: this._gamma,
+					min: 1,
+					max: 5
 				},
+				// TODO: may be for the future.
+				// {
+				// 	type: "text",
+				// 	label: "total states",
+				// 	name: "_totalStates",
+				// 	value: this._totalStates,
+				// 	title: "TOTAL STATES",
+				// 	applyOnRestart: true
+				// },
 			],
 
 			buttons: [
@@ -375,11 +386,15 @@ class MainModule
 		this._shadowRaySamplesIndex = MemoryManager.allocf32(1);
 		this._cellSizeIndex = MemoryManager.allocf32(1);
 		this._showDepthOverlayIndex = MemoryManager.allocf32(1);
+		this._temporalAlphaIndex = MemoryManager.allocf32(1);
+		this._gammaIndex = MemoryManager.allocf32(1);
 		MemoryManager.writef32(this._windowSizeIndex, this._canvas.width, this._canvas.height);
 		MemoryManager.writef32(this._depthRaySamplesIndex, this._depthSamples);
 		MemoryManager.writef32(this._shadowRaySamplesIndex, this._shadowSampels);
 		MemoryManager.writef32(this._cellSizeIndex, this._cellSize);
 		MemoryManager.writef32(this._showDepthOverlayIndex, this._showDepthOverlay);
+		MemoryManager.writef32(this._temporalAlphaIndex, this._temporalAlpha);
+		MemoryManager.writef32(this._gammaIndex, this._gamma);
 	}
 
 	_updatePerspectiveMatrix()
@@ -1531,6 +1546,8 @@ class MainModule
 		MemoryManager.writef32(this._shadowRaySamplesIndex, this._shadowSampels);
 		MemoryManager.writef32(this._cellSizeIndex, this._cellSize);
 		MemoryManager.writef32(this._showDepthOverlayIndex, this._showDepthOverlay);
+		MemoryManager.writef32(this._temporalAlphaIndex, this._temporalAlpha);
+		MemoryManager.writef32(this._gammaIndex, this._gamma);
 	}
 
 	_renderPass(commandEncoder)

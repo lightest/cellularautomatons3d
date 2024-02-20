@@ -25,7 +25,9 @@ struct CommonBufferLayout {
 	depthSamples: f32,
 	shadowSamples: f32,
 	cellSize: f32,
-	showDepthBuffer: f32
+	showDepthBuffer: f32,
+	temporalAlpha: f32,
+	gamma: f32
 };
 
 struct VertexOut {
@@ -243,7 +245,7 @@ fn getCellFromSamplePoint(samplePoint: vec3f) -> CellData
 	return cellData;
 }
 
-fn calculateLigtingAndOcclusionAt(samplePoint: vec3f, vUv: vec2f) -> vec4f
+fn calculateLightingAndOcclusionAt(samplePoint: vec3f, vUv: vec2f) -> vec4f
 {
 	var out = vec4f(0, 0, 0, 1);
 	var occlusionFactor = 1.0f;
@@ -292,7 +294,7 @@ fn calculateLigtingAndOcclusionAt(samplePoint: vec3f, vUv: vec2f) -> vec4f
 
 fn mixWithReprojectedColor(currentSampleColor: vec4f, prevSampleColor: vec4f, samplePos: vec3f, farthestMarchPos: vec3f, uvReprojected: vec2f, prevDepthReprojected: f32) -> vec4f
 {
-	var temporalAlpha = 0.1f;
+	var temporalAlpha = uCommonUniformsBuffer.temporalAlpha;
 	var prevColor = prevSampleColor;
 	let viewMat = uCommonUniformsBuffer.viewMat;
 	let uPrevViewMat = uCommonUniformsBuffer.prevViewMat;
@@ -357,7 +359,7 @@ fn getReprojectedUV(samplePos: vec3f) -> vec2f
 
 fn mixWithReprojectedDepth(current: vec2f, prev: vec2f, samplePoint: vec3f, farthestMarchPos: vec3f, uvReprojected: vec2f) -> vec4f
 {
-	var temporalAlpha = 0.1f;
+	var temporalAlpha = uCommonUniformsBuffer.temporalAlpha;
 	var prevDepth = prev.r;
 	let viewMat = uCommonUniformsBuffer.viewMat;
 	let uPrevViewMat = uCommonUniformsBuffer.prevViewMat;
@@ -655,7 +657,7 @@ fn fragment_main(fragData: VertexOut) -> ShaderOut
 
 		// mixedDepth.r = currentDepth.r;
 
-		out = calculateLigtingAndOcclusionAt(moreAccurateSamplePoint, fragData.vUv);
+		out = calculateLightingAndOcclusionAt(moreAccurateSamplePoint, fragData.vUv);
 
 		let prevColor = textureLoad(prevFrame, vec2i(uvReprojected * uWindowSize), 0);
 		mixedColor = mixWithReprojectedColor(out, prevColor, moreAccurateSamplePoint, rayMarchOut.farthestMarchPoint, uvReprojected, prevDepthReprojected.r);
@@ -684,10 +686,9 @@ fn fragment_main(fragData: VertexOut) -> ShaderOut
 		out = vec4f(mixedDepth.r, 0, 0, 1);
 	}
 
-	// Gamma correction with 2.2f.
-	shaderOut.presentation = vec4f(pow(out.xyz, vec3f(1 / 2.2f)), out.w);
 	shaderOut.light = vec4f(out.xyz, 1.0f);
 	shaderOut.depth = vec2f(mixedDepth.r, 1.0f);
+	shaderOut.presentation = vec4f(pow(out.xyz, vec3f(1 / uCommonUniformsBuffer.gamma)), out.w);
 
 	return shaderOut;
 }

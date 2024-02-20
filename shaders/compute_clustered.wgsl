@@ -182,7 +182,7 @@ fn updateU32Cluster(invId: vec3u)
 }
 
 @compute
-@workgroup_size(1, 8, 8)
+@workgroup_size(1, 16, 16)
 fn compute_main (@builtin(global_invocation_id) invId: vec3u)
 {
 	updateU32Cluster(invId);
