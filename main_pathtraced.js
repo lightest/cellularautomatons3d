@@ -130,6 +130,10 @@ class MainModule
 		this._randomInitialState = false;
 		this._temporalAlpha = 0.1;
 		this._gamma = 2.2;
+		this._material =
+		{
+			roughness: .75
+		};
 
 		// 26 is the maximum possible amount of neighbours to consider: 9 in front of the cell, 9 in the back and 8 around.
 		// 27 is to cover the last index.
@@ -271,6 +275,14 @@ class MainModule
 				},
 				{
 					type: "float",
+					label: "material roughness",
+					name: "_material.roughness",
+					value: this._material.roughness,
+					min: 0,
+					max: 1
+				},
+				{
+					type: "float",
 					label: "temporal reprojection alpha",
 					name: "_temporalAlpha",
 					value: this._temporalAlpha,
@@ -388,6 +400,7 @@ class MainModule
 		this._showDepthOverlayIndex = MemoryManager.allocf32(1);
 		this._temporalAlphaIndex = MemoryManager.allocf32(1);
 		this._gammaIndex = MemoryManager.allocf32(1);
+		this._roughnessIndex = MemoryManager.allocf32(1);
 		MemoryManager.writef32(this._windowSizeIndex, this._canvas.width, this._canvas.height);
 		MemoryManager.writef32(this._depthRaySamplesIndex, this._depthSamples);
 		MemoryManager.writef32(this._shadowRaySamplesIndex, this._shadowSampels);
@@ -395,6 +408,7 @@ class MainModule
 		MemoryManager.writef32(this._showDepthOverlayIndex, this._showDepthOverlay);
 		MemoryManager.writef32(this._temporalAlphaIndex, this._temporalAlpha);
 		MemoryManager.writef32(this._gammaIndex, this._gamma);
+		MemoryManager.writef32(this._roughnessIndex, this._material.roughness);
 	}
 
 	_updatePerspectiveMatrix()
@@ -1548,6 +1562,7 @@ class MainModule
 		MemoryManager.writef32(this._showDepthOverlayIndex, this._showDepthOverlay);
 		MemoryManager.writef32(this._temporalAlphaIndex, this._temporalAlpha);
 		MemoryManager.writef32(this._gammaIndex, this._gamma);
+		MemoryManager.writef32(this._roughnessIndex, this._material.roughness);
 	}
 
 	_renderPass(commandEncoder)
