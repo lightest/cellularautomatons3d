@@ -417,7 +417,7 @@ fn throwbridgeReitzGGX(surfaceNormal: vec3f, halfWayVector: vec3f, roughness: f3
 }
 
 // Schlick-GGX:
-fn shlickGGX(surfaceNormal: vec3f, viewDir: vec3f, roughness: f32) -> f32
+fn shlickGGX(surfaceNormal: vec3f, dir: vec3f, roughness: f32) -> f32
 {
 	let n = roughness + 1.0f;
 
@@ -425,13 +425,21 @@ fn shlickGGX(surfaceNormal: vec3f, viewDir: vec3f, roughness: f32) -> f32
 	// roughness remapping.
 	let kDirect = (n * n) / 8.0f;
 
-	let NoV = max(0.0f, dot(surfaceNormal, viewDir));
+	let NoV = max(0.0f, dot(surfaceNormal, dir));
 	let denom = NoV * (1.0f - kDirect) + kDirect;
 
 	return NoV / denom;
 }
 
-fn surfaceBRDF(lightDir: vec3f, viewDir: vec3f, surfaceNormal: vec3f, roughness: f32, albedo: vec3f) -> vec3f
+// Fresnel-Schlick approximation:
+fn fresnelSchlick(halfWayVector: vec3f, viewDir: vec3f, baseSurfaceReflectivity: vec3f) -> vec3f
+{
+	let p = pow(1.0f - dot(halfWayVector, viewDir), 5.0f);
+
+	return baseSurfaceReflectivity + (1.0f - baseSurfaceReflectivity) * p;
+}
+
+fn surfaceBRDF(lightDir: vec3f, viewDir: vec3f, surfaceNormal: vec3f, roughness: f32, albedo: vec3f, baseSurfaceReflectivity: vec3f) -> vec3f
 {
 	let halfWayVector: vec3f = normalize(-lightDir - viewDir);
 
@@ -445,7 +453,7 @@ fn surfaceBRDF(lightDir: vec3f, viewDir: vec3f, surfaceNormal: vec3f, roughness:
 	let G = shlickGGX(surfaceNormal, -viewDir, roughness) * shlickGGX(surfaceNormal, -lightDir, roughness);
 
 	// Fresnel equation:
-	let F = 1.0f;
+	let F = fresnelSchlick(halfWayVector, -viewDir, baseSurfaceReflectivity);
 
 	// TODO: ensure division by zero in this case is ok.
 	// Cook-Torrance specular:
@@ -463,6 +471,16 @@ fn calculateLigtingAt(samplePoint: vec3f, cellOrigin: vec3f, initialMaterialColo
 	let viewMat = uCommonUniformsBuffer.viewMat;
 	let surfaceNormal = getCubeFaceNormal(samplePoint, cellOrigin);
 	let roughness = uCommonUniformsBuffer.roughness;
+
+	// Silver:
+	// let baseSurfaceReflectivity = vec3f(0.95, 0.93, 0.88);
+
+	// Gold:
+	// let baseSurfaceReflectivity = vec3f(1.00, 0.71, 0.29);
+
+	// Diamond:
+	let baseSurfaceReflectivity = vec3f(0.17, 0.17, 0.17);
+
 	let cameraPos = viewMat[3].xyz;
 	let viewDir = normalize(samplePoint - cameraPos);
 	let lightSource = uCommonUniformsBuffer.lightSource;
@@ -478,9 +496,10 @@ fn calculateLigtingAt(samplePoint: vec3f, cellOrigin: vec3f, initialMaterialColo
 	let reflectedLightDir = reflect(incidentLightDir, surfaceNormal);
 	let reflectedLight = incidentLight * dot(reflectedLightDir, -viewDir);
 	let refractedLight = incidentLight - reflectedLight;
+	let brdf = surfaceBRDF(incidentLightDir, viewDir, surfaceNormal, roughness, initialMaterialColor.xyz, baseSurfaceReflectivity);
 
 	// Rendering equation.
-	let Lr = surfaceBRDF(incidentLightDir, viewDir, surfaceNormal, roughness, initialMaterialColor.xyz) * incidentLight * dot(-incidentLightDir, surfaceNormal);
+	let Lr = brdf * incidentLight * dot(-incidentLightDir, surfaceNormal);
 	let Lo = incidentLight - Lr;
 	let totalObservedSpectrum: vec3f = (Lr) / distanceToCameraFactor;
 

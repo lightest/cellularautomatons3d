@@ -129,10 +129,10 @@ class MainModule
 		this._totalStates = 2;
 		this._randomInitialState = false;
 		this._temporalAlpha = 0.1;
-		this._gamma = 2.2;
+		this._gamma = 2;
 		this._material =
 		{
-			roughness: .75
+			roughness: .29
 		};
 
 		// 26 is the maximum possible amount of neighbours to consider: 9 in front of the cell, 9 in the back and 8 around.
@@ -143,7 +143,7 @@ class MainModule
 		this._lightSource =
 		{
 			x: 0.35, y: this._lightPositionDistance, z: 0,
-			magnitude: 3,
+			magnitude: 10,
 			_bufferIndex: MemoryManager.allocf32(4),
 
 			update()
@@ -295,7 +295,7 @@ class MainModule
 					name: "_lightSource.magnitude",
 					value: this._lightSource.magnitude,
 					min: 0,
-					max: 10
+					max: 100
 				},
 				{
 					type: "integer",
