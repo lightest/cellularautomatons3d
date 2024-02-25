@@ -2,6 +2,26 @@
 	box-sizing: border-box;
 }
 
+@font-face {
+	font-family: "ibmvga8";
+	src: url(fonts/WebPlus_IBM_VGA_8x14.woff);
+}
+
+@font-face {
+	font-family: "ibmvga8x16";
+	src: url(fonts/WebPlus_IBM_VGA_8x16.woff);
+}
+
+@font-face {
+	font-family: "ibmvga9";
+	src: url(fonts/WebPlus_IBM_VGA_9x14.woff);
+}
+
+@font-face {
+	font-family: "ibmvga9x16";
+	src: url(fonts/WebPlus_IBM_VGA_9x16.woff);
+}
+
 body {
 	margin: 0;
 	background: black;
@@ -26,7 +46,7 @@ canvas {
 	height: 100%;
 	padding: 16px;
 	color: white;
-	font-family: "consolas";
+	font-family: "ibmvga9x16";
 	box-shadow: 0 0 0px 1px rgb(39 39 39 / 39%),
 	0 -2px 1px 0px rgb(255 255 255 / 42%),
 	inset 0 -9px 16px -5px rgb(255 255 255 / 13%),
@@ -58,7 +78,7 @@ canvas {
 
 .ui-input input, .ui-input select {
 	padding: 8px;
-	font-family: "consolas";
+	font-family: "ibmvga9x16";
 	margin-left: auto;
 }
 
@@ -77,6 +97,14 @@ canvas {
 	height: 35px;
 	margin: 0;
 	margin-left: auto;
+}
+
+.ui-input input[type="color"]
+{
+    padding: 0;
+    border: none;
+    outline: none;
+    background: none;
 }
 
 .ui-input select {

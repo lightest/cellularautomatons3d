@@ -239,6 +239,13 @@ class MainModule
 		this._ui.init();
 		this._ui.setUIElements({
 			fields: [
+				// {
+				// 	type: "color",
+				// 	label: "color",
+				// 	name: "_testcolor",
+				// 	value: this._testcolor,
+				// 	title: "colortest"
+				// },
 				{
 					type: "integer",
 					label: "grid size",
@@ -248,6 +255,7 @@ class MainModule
 					max: 1024,
 					title: "multiples of 32",
 					applyOnRestart: true,
+					customFormatter: this._gridSizeUIFormatter
 				},
 				{
 					type: "float",
@@ -559,6 +567,27 @@ class MainModule
 		{
 			this._buttonClickHandlers[e.name](e);
 		}
+	}
+
+	// Round to the closest multiples of 32.
+	_gridSizeUIFormatter(v)
+	{
+		let out = v;
+		let vMod32 = v % 32;
+
+		if (vMod32 > 0)
+		{
+			if (vMod32 <= 16)
+			{
+				out = v - vMod32;
+			}
+			else
+			{
+				out = v - vMod32 + 32;
+			}
+		}
+
+		return out;
 	}
 
 	async _getShaderSources()
