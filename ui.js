@@ -108,6 +108,22 @@ const htmlByType = {
 				</label>
 			</div>`
 		);
+	},
+
+	"color": (fieldDesc) =>
+	{
+		return(
+			`<div class="ui-input">
+				<label><div class="caption">${fieldDesc.label}:</div>
+					<input
+						type="color"
+						name="${fieldDesc.name}"
+						value="${fieldDesc.value}"
+						title="${fieldDesc.title || ""}"
+						data-apply-on-restart="${fieldDesc.applyOnRestart || false}" />
+				</label>
+			</div>`
+		);
 	}
 };
 
@@ -338,6 +354,14 @@ export class UI
 		this._runEventHandlers("input", { name, value, applyOnRestart });
 	}
 
+	_onColorInput(e)
+	{
+		const name = e.currentTarget.name;
+		const value = e.currentTarget.value;
+		const applyOnRestart = e.currentTarget.dataset.applyOnRestart === "true";
+		this._runEventHandlers("input", { name, value, applyOnRestart });
+	}
+
 	_onCheckboxChange(e)
 	{
 		const name = e.currentTarget.name;
@@ -366,6 +390,7 @@ export class UI
 		const bindedNumericInputHandler = this._onNumericInput.bind(this);
 		const bindedNumericChangeHandler = this._onNumericChange.bind(this);
 		const bindedTextInputHandler = this._onTextInput.bind(this);
+		const bindedColorInputHandler = this._onColorInput.bind(this);
 		const bindedChangeHandler = this._onCheckboxChange.bind(this);
 		const buttonClickHandler = this._onClick.bind(this);
 
@@ -379,6 +404,10 @@ export class UI
 			else if (inputs[i].type === "text")
 			{
 				inputs[i].addEventListener("input", bindedTextInputHandler);
+			}
+			else if (inputs[i].type === "color")
+			{
+				inputs[i].addEventListener("input", bindedColorInputHandler);
 			}
 			else if (inputs[i].type === "checkbox")
 			{

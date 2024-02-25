@@ -130,6 +130,7 @@ class MainModule
 		this._randomInitialState = false;
 		this._temporalAlpha = 0.1;
 		this._gamma = 2.2;
+		this._testcolor = "#00ff00";
 
 		// 26 is the maximum possible amount of neighbours to consider: 9 in front of the cell, 9 in the back and 8 around.
 		// 27 is to cover the last index.
@@ -235,6 +236,13 @@ class MainModule
 		this._ui.init();
 		this._ui.setUIElements({
 			fields: [
+				// {
+				// 	type: "color",
+				// 	label: "color",
+				// 	name: "_testcolor",
+				// 	value: this._testcolor,
+				// 	title: "colortest"
+				// },
 				{
 					type: "integer",
 					label: "grid size",
