@@ -288,7 +288,7 @@ fn calculateLightingAndOcclusionAt(samplePoint: vec3f, vUv: vec2f) -> vec4f
 
 	let c = cellCoords / uGridSize;
 	let cellColor = vec4f(c.xy, 1f - c.x, 1f);
-	out = calculateLigtingAt(samplePoint, cellOrigin, cellColor) * occlusionFactor;
+	out = calculateLightingAt(samplePoint, cellOrigin, cellColor) * occlusionFactor;
 
 	return out;
 }
@@ -466,7 +466,7 @@ fn surfaceBRDF(lightDir: vec3f, viewDir: vec3f, surfaceNormal: vec3f, roughness:
 	return fL + fCT;
 }
 
-fn calculateLigtingAt(samplePoint: vec3f, cellOrigin: vec3f, initialMaterialColor: vec4f) -> vec4f
+fn calculateLightingAt(samplePoint: vec3f, cellOrigin: vec3f, initialMaterialColor: vec4f) -> vec4f
 {
 	let viewMat = uCommonUniformsBuffer.viewMat;
 	let surfaceNormal = getCubeFaceNormal(samplePoint, cellOrigin);
