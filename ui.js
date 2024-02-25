@@ -117,6 +117,7 @@ export class UI
 	{
 		this._cfg = cfg;
 		this._uiElements = {};
+		this._lutByName = {};
 		this._uiBodyDOM = undefined;
 		this._handlers = {};
 		this.drawing = false;
@@ -129,6 +130,7 @@ export class UI
 	setUIElements(data)
 	{
 		this._uiElements = data;
+		this._generateLUTByName(data);
 		const html = this._buildUIHTML(data);
 		document.body.insertAdjacentHTML("beforeend", html);
 		this._uiBodyDOM = document.querySelector(".ui-body");
@@ -149,8 +151,7 @@ export class UI
 			}
 			else
 			{
-				// TODO: add a hashmap by name for faster search if needed.
-				const existingFieldDesc = this._uiElements.fields.find(field => field.name === inputs[i].name);
+				const existingFieldDesc = this._lutByName[inputs[i].name];
 				if (existingFieldDesc)
 				{
 					inputs[i].title = existingFieldDesc.title || "";
@@ -233,6 +234,18 @@ export class UI
 		return html;
 	}
 
+	_generateLUTByName(data)
+	{
+		const lut = {};
+
+		for (let i = 0; i < data.fields.length; i++)
+		{
+			lut[data.fields[i].name] = data.fields[i];
+		}
+
+		this._lutByName = lut;
+	}
+
 	_runEventHandlers(e, data)
 	{
 		if (this._handlers[e] instanceof Array)
@@ -277,12 +290,18 @@ export class UI
 		const name = e.currentTarget.name;
 		const min = parseFloat(e.currentTarget.min);
 		const max = parseFloat(e.currentTarget.max);
+		const fieldDesc = this._lutByName[name];
 		let parsedVal = parseFloat(e.currentTarget.value);
 		let value = min;
 
 		if (!Number.isNaN(parsedVal))
 		{
 			value = Math.min(max, Math.max(min, parsedVal));
+		}
+
+		if (fieldDesc.customFormatter !== undefined)
+		{
+			value =	fieldDesc.customFormatter(value);
 		}
 
 		const applyOnRestart = e.currentTarget.dataset.applyOnRestart === "true";
@@ -293,12 +312,19 @@ export class UI
 	{
 		const min = parseFloat(e.currentTarget.min);
 		const max = parseFloat(e.currentTarget.max);
+		const name = e.currentTarget.name;
+		const fieldDesc = this._lutByName[name];
 		let parsedVal = parseFloat(e.currentTarget.value);
 		let value = min;
 
 		if (!Number.isNaN(parsedVal))
 		{
 			value = Math.min(max, Math.max(min, parsedVal));
+		}
+
+		if (fieldDesc.customFormatter !== undefined)
+		{
+			value =	fieldDesc.customFormatter(value);
 		}
 
 		e.currentTarget.value = value;
