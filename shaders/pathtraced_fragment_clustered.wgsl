@@ -67,7 +67,7 @@ const PI_OVER_180: f32 = PI / 180.0f;
 const COT_HALF_FOV: f32 = 1. / tan((37.5f) * PI_OVER_180);
 const HALF_CUBE_SIZE = 0.5f;
 const FULL_CUBE_SIZE = HALF_CUBE_SIZE * 2.0f;
-const OCCLUSION_FACTOR: f32 = 0.095f;
+const OCCLUSION_FACTOR: f32 = 0.0f;//0.095f;
 
 // TODO: replace with uniforms.
 const uCubeOrigin = vec3f(0.0f, 0.0f, 0.0f);
@@ -507,7 +507,7 @@ fn calculateLightingAt(samplePoint: vec3f, cellOrigin: vec3f, initialMaterialCol
 	// let totalObservedSpectrum = (initialMaterialColor.xyz * reflectedLight + refractedLight * initialMaterialColor.xyz) / distanceToCameraFactor;
 
 	// let out = vec4(out.xyz * incidentLight, out.w);
-	let out = vec4f(totalObservedSpectrum, initialMaterialColor.w);
+	let out = max(vec4f(0.0), vec4f(totalObservedSpectrum, initialMaterialColor.w));
 
 	return out;
 }
