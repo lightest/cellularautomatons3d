@@ -1,3 +1,31 @@
+function RGBToHex(rgb = [])
+{
+	// Convert each channel to integer
+	const r = Math.round(rgb[0] * 255);
+	const g = Math.round(rgb[1] * 255);
+	const b = Math.round(rgb[2] * 255);
+
+	// Convert to hexadecimal format
+	return "#" + ((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1);
+}
+
+function hexToRgb(hex = "") {
+    // Remove '#' if present
+    hex = hex.replace(/^#/, '');
+
+    // Parse hexadecimal string to integers
+    let bigint = parseInt(hex, 16);
+
+    // Extract RGB components
+    let r = (bigint >> 16) & 255;
+    let g = (bigint >> 8) & 255;
+    let b = bigint & 255;
+
+    // Convert to range 0-1 and return as Float32Array
+    return new Float32Array([r / 255, g / 255, b / 255]);
+}
+
+
 const htmlByType = {
 	"integer": (fieldDesc) =>
 	{
@@ -112,13 +140,15 @@ const htmlByType = {
 
 	"color": (fieldDesc) =>
 	{
+		const value = (typeof fieldDesc.value === "object" && fieldDesc.value.length !== undefined) ?
+		RGBToHex(fieldDesc.value) : fieldDesc.value;
 		return(
 			`<div class="ui-input">
 				<label><div class="caption">${fieldDesc.label}:</div>
 					<input
 						type="color"
 						name="${fieldDesc.name}"
-						value="${fieldDesc.value}"
+						value="${value}"
 						title="${fieldDesc.title || ""}"
 						data-apply-on-restart="${fieldDesc.applyOnRestart || false}" />
 				</label>
@@ -357,7 +387,8 @@ export class UI
 	_onColorInput(e)
 	{
 		const name = e.currentTarget.name;
-		const value = e.currentTarget.value;
+		const fieldDesc = this._lutByName[name];
+		const value = fieldDesc.format === "rgb" ? hexToRgb(e.currentTarget.value) : e.currentTarget.value;
 		const applyOnRestart = e.currentTarget.dataset.applyOnRestart === "true";
 		this._runEventHandlers("input", { name, value, applyOnRestart });
 	}

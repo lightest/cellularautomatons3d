@@ -132,7 +132,10 @@ class MainModule
 		this._gamma = 2;
 		this._material =
 		{
-			roughness: .29
+			roughness: .29,
+
+			// Diamond base reflectivity:
+			baseReflectivity: new Float32Array(3).fill(0.17)
 		};
 
 		// 26 is the maximum possible amount of neighbours to consider: 9 in front of the cell, 9 in the back and 8 around.
@@ -290,6 +293,13 @@ class MainModule
 					max: 1
 				},
 				{
+					type: "color",
+					format: "rgb",
+					label: "base reflectivity",
+					name: "_material.baseReflectivity",
+					value: this._material.baseReflectivity
+				},
+				{
 					type: "float",
 					label: "temporal reprojection alpha",
 					name: "_temporalAlpha",
@@ -407,16 +417,18 @@ class MainModule
 		this._cellSizeIndex = MemoryManager.allocf32(1);
 		this._showDepthOverlayIndex = MemoryManager.allocf32(1);
 		this._temporalAlphaIndex = MemoryManager.allocf32(1);
-		this._gammaIndex = MemoryManager.allocf32(1);
+		this._baseReflectivityIndex = MemoryManager.allocf32(3);
 		this._roughnessIndex = MemoryManager.allocf32(1);
+		this._gammaIndex = MemoryManager.allocf32(1);
 		MemoryManager.writef32(this._windowSizeIndex, this._canvas.width, this._canvas.height);
 		MemoryManager.writef32(this._depthRaySamplesIndex, this._depthSamples);
 		MemoryManager.writef32(this._shadowRaySamplesIndex, this._shadowSampels);
 		MemoryManager.writef32(this._cellSizeIndex, this._cellSize);
 		MemoryManager.writef32(this._showDepthOverlayIndex, this._showDepthOverlay);
 		MemoryManager.writef32(this._temporalAlphaIndex, this._temporalAlpha);
-		MemoryManager.writef32(this._gammaIndex, this._gamma);
+		MemoryManager.writef32(this._baseReflectivityIndex, this._material.baseReflectivity);
 		MemoryManager.writef32(this._roughnessIndex, this._material.roughness);
+		MemoryManager.writef32(this._gammaIndex, this._gamma);
 	}
 
 	_updatePerspectiveMatrix()
@@ -464,7 +476,17 @@ class MainModule
 		if (valueAcceptor[nameComponents[nameComponents.length - 1]] !== undefined)
 		{
 			// Last one will be value itself, set it.
-			valueAcceptor[nameComponents[nameComponents.length - 1]] = value;
+			if (typeof value === "object" && value.length !== undefined)
+			{
+				for (let i = 0; i < value.length; i++)
+				{
+					valueAcceptor[nameComponents[nameComponents.length - 1]][i] = value[i];
+				}
+			}
+			else
+			{
+				valueAcceptor[nameComponents[nameComponents.length - 1]] = value;
+			}
 		}
 	}
 
@@ -1590,8 +1612,9 @@ class MainModule
 		MemoryManager.writef32(this._cellSizeIndex, this._cellSize);
 		MemoryManager.writef32(this._showDepthOverlayIndex, this._showDepthOverlay);
 		MemoryManager.writef32(this._temporalAlphaIndex, this._temporalAlpha);
-		MemoryManager.writef32(this._gammaIndex, this._gamma);
+		MemoryManager.writef32Array(this._baseReflectivityIndex, this._material.baseReflectivity);
 		MemoryManager.writef32(this._roughnessIndex, this._material.roughness);
+		MemoryManager.writef32(this._gammaIndex, this._gamma);
 	}
 
 	_renderPass(commandEncoder)

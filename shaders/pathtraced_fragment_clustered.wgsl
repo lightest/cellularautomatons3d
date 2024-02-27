@@ -27,8 +27,9 @@ struct CommonBufferLayout {
 	cellSize: f32,
 	showDepthBuffer: f32,
 	temporalAlpha: f32,
+	baseSurfaceReflectivity: vec3f,
+	roughness: f32,
 	gamma: f32,
-	roughness: f32
 };
 
 struct VertexOut {
@@ -479,7 +480,8 @@ fn calculateLightingAt(samplePoint: vec3f, cellOrigin: vec3f, initialMaterialCol
 	// let baseSurfaceReflectivity = vec3f(1.00, 0.71, 0.29);
 
 	// Diamond:
-	let baseSurfaceReflectivity = vec3f(0.17, 0.17, 0.17);
+	// let baseSurfaceReflectivity = vec3f(0.17, 0.17, 0.17);
+	let baseSurfaceReflectivity: vec3f = uCommonUniformsBuffer.baseSurfaceReflectivity;
 
 	let cameraPos = viewMat[3].xyz;
 	let viewDir = normalize(samplePoint - cameraPos);
