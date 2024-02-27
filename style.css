@@ -46,7 +46,7 @@ canvas {
 	height: 100%;
 	padding: 16px;
 	color: white;
-	font-family: "ibmvga9x16";
+	font-family: "consolas";
 	box-shadow: 0 0 0px 1px rgb(39 39 39 / 39%),
 	0 -2px 1px 0px rgb(255 255 255 / 42%),
 	inset 0 -9px 16px -5px rgb(255 255 255 / 13%),
@@ -78,7 +78,7 @@ canvas {
 
 .ui-input input, .ui-input select {
 	padding: 8px;
-	font-family: "ibmvga9x16";
+	font-family: "consolas";
 	margin-left: auto;
 }
 

@@ -27,7 +27,9 @@ struct CommonBufferLayout {
 	cellSize: f32,
 	showDepthBuffer: f32,
 	temporalAlpha: f32,
-	gamma: f32
+	baseSurfaceReflectivity: vec3f,
+	roughness: f32,
+	gamma: f32,
 };
 
 struct VertexOut {
@@ -66,7 +68,7 @@ const PI_OVER_180: f32 = PI / 180.0f;
 const COT_HALF_FOV: f32 = 1. / tan((37.5f) * PI_OVER_180);
 const HALF_CUBE_SIZE = 0.5f;
 const FULL_CUBE_SIZE = HALF_CUBE_SIZE * 2.0f;
-const OCCLUSION_FACTOR: f32 = 0.095f;
+const OCCLUSION_FACTOR: f32 = 0.0f;//0.095f;
 
 // TODO: replace with uniforms.
 const uCubeOrigin = vec3f(0.0f, 0.0f, 0.0f);
@@ -287,7 +289,7 @@ fn calculateLightingAndOcclusionAt(samplePoint: vec3f, vUv: vec2f) -> vec4f
 
 	let c = cellCoords / uGridSize;
 	let cellColor = vec4f(c.xy, 1f - c.x, 1f);
-	out = calculateLigtingAt(samplePoint, cellOrigin, cellColor) * occlusionFactor;
+	out = calculateLightingAt(samplePoint, cellOrigin, cellColor) * occlusionFactor;
 
 	return out;
 }
@@ -404,10 +406,83 @@ fn mixWithReprojectedDepth(current: vec2f, prev: vec2f, samplePoint: vec3f, fart
 	return vec4f(mixedDepth, 0.0f, 0.0f, 1.0f);
 }
 
-fn calculateLigtingAt(samplePoint: vec3f, cellOrigin: vec3f, initialMaterialColor: vec4f) -> vec4f
+// Trowbridge-Reitz GGX:
+fn throwbridgeReitzGGX(surfaceNormal: vec3f, halfWayVector: vec3f, roughness: f32) -> f32
+{
+	let a2: f32 = roughness * roughness;
+	let NoH = dot(surfaceNormal, halfWayVector);
+	let NoH2 = NoH * NoH;
+	let f = NoH2 * (a2 - 1.0f) + 1.0f;
+
+	return a2 / (PI * f * f);
+}
+
+// Schlick-GGX:
+fn shlickGGX(surfaceNormal: vec3f, dir: vec3f, roughness: f32) -> f32
+{
+	let n = roughness + 1.0f;
+
+	// TODO: learn more about roughness remapping and whent it's relevant.
+	// roughness remapping.
+	let kDirect = (n * n) / 8.0f;
+
+	let NoV = max(0.0f, dot(surfaceNormal, dir));
+	let denom = NoV * (1.0f - kDirect) + kDirect;
+
+	return NoV / denom;
+}
+
+// Fresnel-Schlick approximation:
+fn fresnelSchlick(halfWayVector: vec3f, viewDir: vec3f, baseSurfaceReflectivity: vec3f) -> vec3f
+{
+	let p = pow(1.0f - dot(halfWayVector, viewDir), 5.0f);
+
+	return baseSurfaceReflectivity + (1.0f - baseSurfaceReflectivity) * p;
+}
+
+fn surfaceBRDF(lightDir: vec3f, viewDir: vec3f, surfaceNormal: vec3f, roughness: f32, albedo: vec3f, baseSurfaceReflectivity: vec3f) -> vec3f
+{
+	let halfWayVector: vec3f = normalize(-lightDir - viewDir);
+
+	// Lambertian diffuse:
+	let fL: vec3f = albedo / PI;
+
+	// Normal distribution function:
+	let D: f32 = throwbridgeReitzGGX(surfaceNormal, halfWayVector, roughness);
+
+	// Geometry function:
+	let G = shlickGGX(surfaceNormal, -viewDir, roughness) * shlickGGX(surfaceNormal, -lightDir, roughness);
+
+	// Fresnel equation:
+	let F = fresnelSchlick(halfWayVector, -viewDir, baseSurfaceReflectivity);
+
+	// TODO: ensure division by zero in this case is ok.
+	// Cook-Torrance specular:
+	let fCT = (D * G * F) / ( 4.0f * dot(-viewDir, surfaceNormal) * dot(-lightDir, surfaceNormal) );
+
+	let reflectedLightDir = reflect(lightDir, surfaceNormal);
+
+	// return clamp(dot(reflectedLightDir, -viewDir), 0.0f, 1.0f);
+
+	return fL + fCT;
+}
+
+fn calculateLightingAt(samplePoint: vec3f, cellOrigin: vec3f, initialMaterialColor: vec4f) -> vec4f
 {
 	let viewMat = uCommonUniformsBuffer.viewMat;
-	let faceNormal = getCubeFaceNormal(samplePoint, cellOrigin);
+	let surfaceNormal = getCubeFaceNormal(samplePoint, cellOrigin);
+	let roughness = uCommonUniformsBuffer.roughness;
+
+	// Silver:
+	// let baseSurfaceReflectivity = vec3f(0.95, 0.93, 0.88);
+
+	// Gold:
+	// let baseSurfaceReflectivity = vec3f(1.00, 0.71, 0.29);
+
+	// Diamond:
+	// let baseSurfaceReflectivity = vec3f(0.17, 0.17, 0.17);
+	let baseSurfaceReflectivity: vec3f = uCommonUniformsBuffer.baseSurfaceReflectivity;
+
 	let cameraPos = viewMat[3].xyz;
 	let viewDir = normalize(samplePoint - cameraPos);
 	let lightSource = uCommonUniformsBuffer.lightSource;
@@ -420,15 +495,21 @@ fn calculateLigtingAt(samplePoint: vec3f, cellOrigin: vec3f, initialMaterialColo
 
 	let incidentLight = lightSource.magnitude / distanceToLightFactor;
 	let incidentLightDir = normalize(samplePoint - lightSource.pos);
-	let reflectedLightDir = reflect(incidentLightDir, faceNormal);
+	let reflectedLightDir = reflect(incidentLightDir, surfaceNormal);
 	let reflectedLight = incidentLight * dot(reflectedLightDir, -viewDir);
+	let refractedLight = incidentLight - reflectedLight;
+	let brdf = surfaceBRDF(incidentLightDir, viewDir, surfaceNormal, roughness, initialMaterialColor.xyz, baseSurfaceReflectivity);
+
+	// Rendering equation.
+	let Lr = brdf * incidentLight * dot(-incidentLightDir, surfaceNormal);
+	let Lo = incidentLight - Lr;
+	let totalObservedSpectrum: vec3f = (Lr) / distanceToCameraFactor;
 
 	// Second term here (incidentLight * out.xyz) simulates diffuse light.
-	let totalObservedSpectrum = (initialMaterialColor.xyz * reflectedLight + incidentLight * initialMaterialColor.xyz) / distanceToCameraFactor;
+	// let totalObservedSpectrum = (initialMaterialColor.xyz * reflectedLight + refractedLight * initialMaterialColor.xyz) / distanceToCameraFactor;
 
 	// let out = vec4(out.xyz * incidentLight, out.w);
-	let out = vec4f(totalObservedSpectrum, initialMaterialColor.w);
-	// let out = vec4(faceNormal * incidentLight, initialMaterialColor.w);
+	let out = max(vec4f(0.0), vec4f(totalObservedSpectrum, initialMaterialColor.w));
 
 	return out;
 }
