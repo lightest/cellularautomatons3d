@@ -70,9 +70,6 @@ const HALF_CUBE_SIZE = 0.5f;
 const FULL_CUBE_SIZE = HALF_CUBE_SIZE * 2.0f;
 const OCCLUSION_FACTOR: f32 = 0.0f;//0.095f;
 
-// TODO: replace with uniforms.
-const uCubeOrigin = vec3f(0.0f, 0.0f, 0.0f);
-
 // Extracting bit wise data from u32.
 const masks = array<u32, 32>(
 	1u,
@@ -194,17 +191,16 @@ fn getCubeFaceNormal(intersectionPoint: vec3f, cubeOrigin: vec3f) -> vec3f
 	return normalize(faceNormal);
 }
 
-fn getCellIdx(cellCoords: vec3f) -> u32
+// NOTE: cellIdx can not be used to access cell value in the cellStates array,
+// but it can be used as a cell identifier for fast comparisons!
+fn getCellIdx(cellCoords: vec3u) -> u32
 {
-	var x = u32(cellCoords.x);
-	var y = u32(cellCoords.y);
-	var z = u32(cellCoords.z);
 	let u32Cols = u32(uGridSize.x);
 	let u32Rows = u32(uGridSize.y);
 	let u32Depth = u32(uGridSize.z);
 	let layerSize = u32(uGridSize.x * uGridSize.y);
 
-	return x + y * u32Cols + z * layerSize;
+	return cellCoords.x + cellCoords.y * u32Cols + cellCoords.z * layerSize;
 }
 
 fn getClusterIdxFromGridCoordinates(cellCoords: vec3u) -> u32
@@ -236,13 +232,11 @@ fn getCellFromSamplePoint(samplePoint: vec3f) -> CellData
 	let cellSize = FULL_CUBE_SIZE / uGridSize;
 	let cellCoords = floor((samplePoint + HALF_CUBE_SIZE) / cellSize);
 	let cellOrigin = cellCoords * cellSize + cellSize * 0.5f - HALF_CUBE_SIZE;
-	// let i = getCellIdx(cellCoords);
-	// let i = getClusterIdx(vec3u(cellCoords));
 
 	var cellData: CellData;
 	cellData.cellOrigin = cellOrigin;
 	cellData.cellCoords = vec3u(cellCoords);
-	// cellData.idx = i;
+	cellData.idx = getCellIdx(cellData.cellCoords);
 
 	return cellData;
 }
@@ -252,9 +246,10 @@ fn calculateLightingAndOcclusionAt(samplePoint: vec3f, vUv: vec2f) -> vec4f
 	var out = vec4f(0, 0, 0, 1);
 	var occlusionFactor = 1.0f;
 	let cellSize = FULL_CUBE_SIZE / uGridSize;
-	let cellCoords = floor((samplePoint + HALF_CUBE_SIZE) / cellSize);
-	let cellOrigin = cellCoords * cellSize + cellSize * 0.5f - HALF_CUBE_SIZE;
-	let cellState = getCellState(vec3u(cellCoords));
+	let cellData = getCellFromSamplePoint(samplePoint);
+	let cellOrigin = cellData.cellOrigin;
+	let cellCoords = cellData.cellCoords;
+	let cellState = getCellState(cellCoords);
 	let lightSource = uCommonUniformsBuffer.lightSource;
 	let uCellSize = uCommonUniformsBuffer.cellSize;
 
@@ -284,12 +279,12 @@ fn calculateLightingAndOcclusionAt(samplePoint: vec3f, vUv: vec2f) -> vec4f
 	{
 		let volumeIntersect = rayCubeIntersect(samplePoint, lightDir, vec3f(0.0f), vec3f(HALF_CUBE_SIZE));
 		let volumeExit = samplePoint + lightDir * volumeIntersect.y;
-		occlusionFactor = rayMarchShadow(samplePoint, volumeExit, vec3u(cellCoords), rndOffset, uCommonUniformsBuffer.shadowSamples);
+		occlusionFactor = rayMarchShadow(samplePoint, volumeExit, cellData.cellCoords, rndOffset, uCommonUniformsBuffer.shadowSamples);
 	}
 
-	let c = cellCoords / uGridSize;
+	let c = vec3f(cellCoords) / uGridSize;
 	let cellColor = vec4f(c.xy, 1f - c.x, 1f);
-	out = calculateLightingAt(samplePoint, cellOrigin, cellColor) * occlusionFactor;
+	out = occlusionFactor * calculateLightingAt(samplePoint, cellOrigin, cellColor);
 
 	return out;
 }
@@ -320,12 +315,7 @@ fn mixWithReprojectedColor(currentSampleColor: vec4f, prevSampleColor: vec4f, sa
 		return currentSampleColor;
 	}
 
-	// if (curCell.idx != reprojectedCell.idx)
-	// {
-	// 	return currentSampleColor;
-	// }
-
-	if (any(curCell.cellCoords != reprojectedCell.cellCoords))
+	if (curCell.idx != reprojectedCell.idx)
 	{
 		return currentSampleColor;
 	}
@@ -338,7 +328,7 @@ fn mixWithReprojectedColor(currentSampleColor: vec4f, prevSampleColor: vec4f, sa
 	// 	temporalAlpha = mix(temporalAlpha, 1.0f, v);
 	// }
 
-	var mixedColor = clamp(mix(prevColor, currentSampleColor, temporalAlpha), vec4f(0.0f), vec4f(1.0f));
+	let mixedColor = clamp(mix(prevColor, currentSampleColor, temporalAlpha), vec4f(0.0f), vec4f(1.0f));
 
 	return mixedColor;
 }
@@ -514,7 +504,7 @@ fn calculateLightingAt(samplePoint: vec3f, cellOrigin: vec3f, initialMaterialCol
 	return out;
 }
 
-fn rayMarchShadow(start: vec3f, end: vec3f, originalCellCoords: vec3u, rndOffset: f32, steps: f32)-> f32
+fn rayMarchShadow(start: vec3f, end: vec3f, startCellCoords: vec3u, rndOffset: f32, steps: f32)-> f32
 {
 	var occlusionFactor: f32 = 1.0f;
 	let dir = normalize(end - start);
@@ -543,7 +533,7 @@ fn rayMarchShadow(start: vec3f, end: vec3f, originalCellCoords: vec3u, rndOffset
 		let cellState = getCellState(vec3u(cellCoords));
 		cellOrigin = cellCoords * cellSize + cellSize * 0.5f - HALF_CUBE_SIZE;
 
-		if (any(vec3u(cellCoords) != originalCellCoords) && cellState == 1)
+		if (any(vec3u(cellCoords) != startCellCoords) && cellState == 1)
 		// if (cellState == 1)
 		{
 			let intersectData = rayCubeIntersect(start, dir, cellOrigin, actualVisibleCubeSize);
@@ -645,7 +635,7 @@ fn estimateLikelyDepth(samplePoint: vec3f, prevDepth: vec2f, prevDepthReprojecte
 	// Actual visible cell size might be smaller than the volume cell it is occupying.
 	let actualVisibleCubeSize = cellSize * uCellSize * 0.5f;
 
-	let prevCell = getCellFromSamplePoint(prevSamplePoint);
+	// let prevCell = getCellFromSamplePoint(prevSamplePoint);
 	let reprojectedCell = getCellFromSamplePoint(reprojectedSamplePoint);
 	let curCell = getCellFromSamplePoint(samplePoint);
 	let reprojectedCellState = getCellState(reprojectedCell.cellCoords);
@@ -655,7 +645,7 @@ fn estimateLikelyDepth(samplePoint: vec3f, prevDepth: vec2f, prevDepthReprojecte
 	// If what we hit on this frame is not the same cell, we overstepped the cell either on this frame or on previous.
 	// If reprojected depth from previous frame is closer, we likely overstepped this frame.
 	// Thus we run cube intersection check for the cell derrived using reprojected depth to get an accurate result.
-	if (reprojectedCellState == 1 && any(curCell.cellCoords != reprojectedCell.cellCoords) && prevDepthRe < currentDepth)
+	if (reprojectedCellState == 1 && curCell.idx != reprojectedCell.idx && prevDepthRe < currentDepth)
 	{
 		let intersectData = rayCubeIntersect(cameraPos, viewRay, reprojectedCell.cellOrigin, actualVisibleCubeSize);
 		if (intersectData.x <= intersectData.y && intersectData.x >= 0)
@@ -691,12 +681,9 @@ fn fragment_main(fragData: VertexOut) -> ShaderOut
 	let uWindowSize = uCommonUniformsBuffer.windowSize;
 
 	let cameraPos = viewMat[3].xyz;
-	// let viewDir = normalize(fragData.worldPosition.xyz - cameraPos);
 	let viewRay = (viewMat * getRay(fragData.vUv)).xyz;
 
 	let cubeIntersections = rayCubeIntersect(cameraPos, viewRay, vec3f(0.0f), vec3f(HALF_CUBE_SIZE));
-	// let cubeIntersections = intersectCube(cameraPos, viewRay, vec3f(-0.5f), vec3f(0.5f));
-
 	let cameraDistToBox = sdBox(cameraPos, vec3f(HALF_CUBE_SIZE));
 
 	var cubeEnterPoint = cameraPos;
@@ -760,7 +747,6 @@ fn fragment_main(fragData: VertexOut) -> ShaderOut
 	// Common buffer allignment tests.
 	// out = vec4f(uCommonUniformsBuffer.data.f1, 1.0f);
 	// out = vec4f(vec3f(uCommonUniformsBuffer.data.f0, 0, 0), 1.0f);
-
 
 	if (uCommonUniformsBuffer.showDepthBuffer == 1.0f && fragData.vUv.x < 0.5f)
 	{

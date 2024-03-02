@@ -714,7 +714,7 @@ class MainModule
 
 	_handleWheel(e)
 	{
-		const translationMul = this._translationSpeedMul * Math.sign(-e.deltaY) * .05;
+		const translationMul = this._translationSpeedMul * Math.sign(-e.deltaY) * .1;
 		this._translationSpeedMul = Math.max(
 			MIN_TRANSLATION_SPEED_MUL,
 			Math.min(this._translationSpeedMul + translationMul, MAX_TRANSLATION_SPEED_MUL)
