@@ -714,8 +714,11 @@ class MainModule
 
 	_handleWheel(e)
 	{
-		this._translationSpeedMul += -Math.sign(e.deltaY) * .05;
-		this._translationSpeedMul = Math.max(MIN_TRANSLATION_SPEED_MUL, Math.min(this._translationSpeedMul, MAX_TRANSLATION_SPEED_MUL));
+		const translationMul = this._translationSpeedMul * Math.sign(-e.deltaY) * .05;
+		this._translationSpeedMul = Math.max(
+			MIN_TRANSLATION_SPEED_MUL,
+			Math.min(this._translationSpeedMul + translationMul, MAX_TRANSLATION_SPEED_MUL)
+		);
 	}
 
 	_handleKeydown(e)
