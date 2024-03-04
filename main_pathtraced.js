@@ -145,8 +145,8 @@ class MainModule
 
 		this._lightSource =
 		{
-			x: 0.35, y: this._lightPositionDistance, z: 0,
-			magnitude: 10,
+			x: .5, y: 1.5, z: 1,
+			magnitude: 15,
 			_bufferIndex: MemoryManager.allocf32(4),
 
 			update()
@@ -1080,6 +1080,16 @@ class MainModule
 		return (x % xGridSize) + (y % this._gridSize) * xGridSize + (z % this._gridSize) * xGridSize * this._gridSize;
 	}
 
+	_getClusterIdxFromGridCoordinates(cellCoords)
+	{
+		// Dividing by 32 because we use uint32 clusters (cells) in the array.
+		const cols = this._gridSize / 32;
+		const layerSize = cols * this._gridSize;
+		const x = Math.floor(cellCoords.x / 32);
+
+		return (x % cols) + (cellCoords.y % this._gridSize) * cols + (cellCoords.z % this._gridSize) * layerSize;
+	}
+
 	_setupIndexBuffer(data)
 	{
 		if (this._indexBuffer)
@@ -1173,14 +1183,15 @@ class MainModule
 			// const center = Math.floor(this._gridSize * .5);
 			// cellStateData[this._getCellIdx3D(center, center, center)] = 1;
 
-			// TODO: tmp hardcode
-			const c = this._gridSize / 32;
-			const x = Math.floor(Math.floor(this._gridSize * .5) / 32) - 1;
-			const y = Math.floor(this._gridSize * .5) - 1;
-			const z = Math.floor(this._gridSize * .5) - 1;
-			const idx = x + y * c + z * this._gridSize * c;
+			const idx = this._getClusterIdxFromGridCoordinates({
+				x: Math.floor(this._gridSize * .5) - 1,
+				y: Math.floor(this._gridSize * .5) - 1,
+				z: Math.floor(this._gridSize * .5) - 1
+			});
+
+			const offset = (Math.floor(this._gridSize * .5) - 1) % 32;
 			console.log("MID INDEX", idx);
-			cellStateData[idx] = 1 << (this._gridSize * .5 - 1);
+			cellStateData[idx] = 1 << offset;
 			// cellStateData[16] = 65535;
 			console.log("INITIAL DATA", cellStateData);
 

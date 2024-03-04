@@ -509,19 +509,20 @@ fn rayMarchShadow(start: vec3f, end: vec3f, startCellCoords: vec3u, rndOffset: f
 	var occlusionFactor: f32 = 1.0f;
 	let dir = normalize(end - start);
 	let marchDepth = length(end - start);
-	var stepSize = marchDepth / steps;
+	let cellSize = FULL_CUBE_SIZE / uGridSize;
+	let uCellSize = uCommonUniformsBuffer.cellSize;
+	// Actual visible cell size might be smaller than the volume cell it is occupying.
+	let actualVisibleCubeSize = cellSize * uCellSize * 0.5f;
+	var stepSize = max((cellSize * uCellSize).x, marchDepth / steps);
+	// var stepSize = marchDepth / steps;
 
 	// TODO: to think how to optimize starting point for shadow marching.
 	var depth = stepSize * rndOffset + 0.0025f;
 	var samplePoint = vec3f(0.0f);
 	var cellCoords = vec3f(0.0f);
 	var cellOrigin = vec3f(0.0f);
-	let cellSize = FULL_CUBE_SIZE / uGridSize;
 	var s = steps;
-	let uCellSize = uCommonUniformsBuffer.cellSize;
 
-	// Actual visible cell size might be smaller than the volume cell it is occupying.
-	let actualVisibleCubeSize = cellSize * uCellSize * 0.5f;
 
 	// while(depth < marchDepth && s >= 0.0f)
 	while(depth < marchDepth)
