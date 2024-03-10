@@ -1155,7 +1155,7 @@ class MainModule
 
 		if (this._randomInitialState)
 		{
-			const center = Math.floor(this._gridSize * .5);
+			const center = Math.floor(this._gridSize * .5) - 1;
 			let i, j, k;
 			for (i = -2; i < 3; i++)
 			{
@@ -1163,7 +1163,21 @@ class MainModule
 				{
 					for (k = -2; k < 3; k++)
 					{
-						cellStateData[ this._getCellIdx3D(center + i, center + j, center + k) ] = Math.random() > .5;
+						const idx = this._getClusterIdxFromGridCoordinates({
+							x: center + i,
+							y: center + j,
+							z: center + k
+						});
+						// const offset = Math.floor(Math.random() * 32);
+						const v = Math.random() > .5;
+						if (v)
+						{
+							cellStateData[idx] = cellStateData[idx] | (1 << center + i);
+						}
+						else
+						{
+							cellStateData[idx] = cellStateData[idx] & ~(1 << center + i);
+						}
 					}
 				}
 			}

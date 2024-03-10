@@ -106,6 +106,43 @@ const masks = array<u32, 32>(
 	2147483648u
 );
 
+// Offsets for neighbours lighting contribution calculations.
+const leftLayer = array<vec3i, 8>(
+	vec3i(-1, -1, -1), vec3i(-1, -1, 0), vec3i(-1, -1, 1),
+	vec3i(-1, 1, -1), vec3i(-1, 1, 0), vec3i(-1, 1, 1),
+	vec3i(-1, 0, -1), vec3i(-1, 0, 1)
+);
+
+const rightLayer = array<vec3i, 8>(
+	vec3i(1, -1, -1), vec3i(1, -1, 0), vec3i(1, -1, 1),
+	vec3i(1, 1, -1), vec3i(1, 1, 0), vec3i(1, 1, 1),
+	vec3i(1, 0, -1), vec3i(1, 0, 1)
+);
+
+const topLayer = array<vec3i, 8>(
+	vec3i(-1, 1, 0), vec3i(1, 1, 0),
+	vec3i(-1, 1, -1), vec3i(0, 1, -1), vec3i(1, 1, -1),
+	vec3i(-1, 1, 1), vec3i(0, 1, 1), vec3i(1, 1, 1)
+);
+
+const bottomLayer = array<vec3i, 8>(
+	vec3i(-1, -1, 0), vec3i(1, -1, 0),
+	vec3i(-1, -1, -1), vec3i(0, -1, -1), vec3i(1, -1, -1),
+	vec3i(-1, -1, 1), vec3i(0, -1, 1), vec3i(1, -1, 1)
+);
+
+const frontLayer = array<vec3i, 8>(
+	vec3i(-1, 1, 1), vec3i(0, 1, 1), vec3i(1, 1, 1),
+	vec3i(-1, 0, 1), vec3i(1, 0, 1),
+	vec3i(-1, -1, 1), vec3i(0, -1, 1), vec3i(1, -1, 1),
+);
+
+const backLayer = array<vec3i, 8>(
+	vec3i(-1, 1, -1), vec3i(0, 1, -1), vec3i(1, 1, -1),
+	vec3i(-1, 0, -1), vec3i(1, 0, -1),
+	vec3i(-1, -1, -1), vec3i(0, -1, -1), vec3i(1, -1, -1),
+);
+
 //note: uniformly distributed, normalized rand, [0;1[
 fn nrand(n: vec2f) -> f32
 {
@@ -171,7 +208,7 @@ fn getCubeFaceNormal(intersectionPoint: vec3f, cubeOrigin: vec3f) -> vec3f
 	// Taking magnitudes to compare them further.
 	let absDir = abs(dirFromCubeOrigin);
 
-	// Finding maximum allows to get direction of the normal pointing at one of 3 the faces.
+	// Finding maximum allows to get direction of the normal pointing at one of the 3 faces.
 	let dirMax = max(max(absDir.x, absDir.y), absDir.z);
 
 	// TODO: figure out how to do this wihtout ifs.
@@ -239,6 +276,27 @@ fn getCellFromSamplePoint(samplePoint: vec3f) -> CellData
 	cellData.idx = getCellIdx(cellData.cellCoords);
 
 	return cellData;
+}
+
+// Calculates lighting contribution from neighbouring cells.
+fn calculateIndirectLighting(samplePoint: vec3f, surfaceNormal: vec3f, cellCoords: vec3u) -> vec4f
+{
+	let indirectLighting: vec4f = vec4f(0);
+	var neighbourOffsets: array<vec3i, 8>;
+	if (surfaceNormal.x > 0)
+	{
+
+	}
+	else if (surfaceNormal.y > 0)
+	{
+
+	}
+	else if (surfaceNormal.z > 0)
+	{
+
+	}
+
+	return indirectLighting;
 }
 
 fn calculateLightingAndOcclusionAt(samplePoint: vec3f, vUv: vec2f) -> vec4f
