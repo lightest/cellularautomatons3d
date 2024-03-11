@@ -113,8 +113,8 @@ const masks = array<u32, 32>(
 // 	vec3i(-1, 0, -1), vec3i(-1, 0, 1), vec3i(-1, 0, 0)
 // );
 
-const leftLayer = array<vec3i, 3>(
-	vec3i(-1, 1, 0), vec3i(-1, -1, 0), vec3i(-1, 0, 0)
+const leftLayer = array<vec3i, 4>(
+	vec3i(-1, 1, 0), vec3i(-1, -1, 0), vec3i(-1, 0, 1),  vec3i(-1, 0, -1)
 );
 
 // const rightLayer = array<vec3i, 9>(
@@ -123,8 +123,8 @@ const leftLayer = array<vec3i, 3>(
 // 	vec3i(1, 0, -1), vec3i(1, 0, 1), vec3i(1, 0, 0)
 // );
 
-const rightLayer = array<vec3i, 3>(
-	vec3i(1, 1, 0), vec3i(1, -1, 0), vec3i(1, 0, 0)
+const rightLayer = array<vec3i, 4>(
+	vec3i(1, 1, 0), vec3i(1, -1, 0), vec3i(1, 0, 1),  vec3i(1, 0, -1)
 );
 
 // const topLayer = array<vec3i, 9>(
@@ -133,8 +133,8 @@ const rightLayer = array<vec3i, 3>(
 // 	vec3i(-1, 1, 1), vec3i(0, 1, 1), vec3i(1, 1, 1)
 // );
 
-const topLayer = array<vec3i, 3>(
-	vec3i(-1, 1, 0), vec3i(1, 1, 0), vec3i(0, 1, 0)
+const topLayer = array<vec3i, 4>(
+	vec3i(-1, 1, 0), vec3i(1, 1, 0), vec3i(0, 1, 1), vec3i(0, 1, -1)
 );
 
 // const bottomLayer = array<vec3i, 9>(
@@ -143,8 +143,8 @@ const topLayer = array<vec3i, 3>(
 // 	vec3i(-1, -1, 1), vec3i(0, -1, 1), vec3i(1, -1, 1)
 // );
 
-const bottomLayer = array<vec3i, 3>(
-	vec3i(-1, -1, 0), vec3i(1, -1, 0), vec3i(0, -1, 0)
+const bottomLayer = array<vec3i, 4>(
+	vec3i(-1, -1, 0), vec3i(1, -1, 0), vec3i(0, -1, 1), vec3i(0, -1, -1)
 );
 
 // const frontLayer = array<vec3i, 9>(
@@ -153,8 +153,8 @@ const bottomLayer = array<vec3i, 3>(
 // 	vec3i(-1, -1, 1), vec3i(0, -1, 1), vec3i(1, -1, 1),
 // );
 
-const frontLayer = array<vec3i, 3>(
-	vec3i(0, 1, 1), vec3i(0, 0, 1), vec3i(0, -1, 1)
+const frontLayer = array<vec3i, 4>(
+	vec3i(0, 1, 1), vec3i(0, -1, 1), vec3i(-1, 0, 1), vec3i(1, 0, 1)
 );
 
 // const backLayer = array<vec3i, 9>(
@@ -163,8 +163,8 @@ const frontLayer = array<vec3i, 3>(
 // 	vec3i(-1, -1, -1), vec3i(0, -1, -1), vec3i(1, -1, -1),
 // );
 
-const backLayer = array<vec3i, 3>(
-	vec3i(0, 1, -1), vec3i(0, 0, -1), vec3i(0, -1, -1)
+const backLayer = array<vec3i, 4>(
+	vec3i(0, 1, -1), vec3i(0, -1, -1), vec3i(-1, 0, -1), vec3i(1, 0, -1)
 );
 
 //note: uniformly distributed, normalized rand, [0;1[
@@ -303,14 +303,15 @@ fn getCellFromSamplePoint(samplePoint: vec3f) -> CellData
 }
 
 // Calculates lighting contribution from neighbouring cells.
-fn calculateIndirectLighting(samplePoint: vec3f, surfaceNormal: vec3f, cellCoords: vec3u, rndOffset: f32) -> vec3f
+fn calculateIndirectLighting(samplePoint: vec3f, surfaceNormal: vec3f, cellOrigin:vec3f, cellCoords: vec3u, rndOffset: f32) -> vec3f
 {
 	var i: u32;
 	let uCellSize = uCommonUniformsBuffer.cellSize;
 	let lightSource = uCommonUniformsBuffer.lightSource;
+	let viewMat = uCommonUniformsBuffer.viewMat;
 	let cellCoords_i32 = vec3i(cellCoords);
 	var indirectLighting = vec3f(0);
-	var neighbourOffsets: array<vec3i, 3>;
+	var neighbourOffsets: array<vec3i, 4>;
 	var neighbourCoords: vec3u;
 	var cellState: u32;
 	var neighbourCellOrigin: vec3f;
@@ -345,7 +346,7 @@ fn calculateIndirectLighting(samplePoint: vec3f, surfaceNormal: vec3f, cellCoord
 		neighbourOffsets = frontLayer;
 	}
 
-	for (i = 0; i < 3; i++)
+	for (i = 0; i < 4; i++)
 	{
 		neighbourCoords = vec3u(cellCoords_i32 + neighbourOffsets[i]);
 		cellState = getCellState(neighbourCoords);
@@ -364,7 +365,9 @@ fn calculateIndirectLighting(samplePoint: vec3f, surfaceNormal: vec3f, cellCoord
 				let volumeExit = neighbourSamplePoint + lightDir * volumeIntersect.y;
 				let occlusionFactor = rayMarchShadow(neighbourSamplePoint, volumeExit, neighbourCoords, rndOffset, uCommonUniformsBuffer.shadowSamples);
 
-				indirectLighting += calculateLightingAt(neighbourSamplePoint, neighbourCellOrigin, neighbourCoords, samplePoint) * occlusionFactor;
+				let reflectedLight: vec3f = calculateLightingAt(neighbourSamplePoint, neighbourCellOrigin, neighbourCoords, samplePoint, vec3f(lightSource.magnitude), lightSource.pos) * occlusionFactor;
+
+				indirectLighting += calculateLightingAt(samplePoint, cellOrigin, cellCoords, viewMat[3].xyz, reflectedLight, neighbourSamplePoint);
 			}
 		}
 	}
@@ -419,8 +422,8 @@ fn calculateLightingAndOcclusionAt(samplePoint: vec3f, vUv: vec2f) -> vec4f
 	let c = vec3f(cellCoords) / uGridSize;
 	let initialMaterialColor = vec3f(c.xy, 1f - c.x);
 
-	out = occlusionFactor * calculateLightingAt(samplePoint, cellOrigin, cellCoords, viewMat[3].xyz) + calculateIndirectLighting(samplePoint, faceNormal, cellCoords, rndOffset);
-	// out = calculateIndirectLighting(samplePoint, faceNormal, cellCoords);
+	out = occlusionFactor * calculateLightingAt(samplePoint, cellOrigin, cellCoords, viewMat[3].xyz, vec3f(lightSource.magnitude), lightSource.pos)
+	+ calculateIndirectLighting(samplePoint, faceNormal, cellOrigin, cellCoords, rndOffset);
 
 	return vec4f(out, 1.0f);
 }
@@ -593,7 +596,7 @@ fn surfaceBRDF(lightDir: vec3f, viewDir: vec3f, surfaceNormal: vec3f, roughness:
 	return fL + fCT;
 }
 
-fn calculateLightingAt(samplePoint: vec3f, cellOrigin: vec3f, cellCoords: vec3u, eyePos: vec3f) -> vec3f
+fn calculateLightingAt(samplePoint: vec3f, cellOrigin: vec3f, cellCoords: vec3u, eyePos: vec3f, incidentLight: vec3f, incidentLightPos: vec3f) -> vec3f
 {
 	let surfaceNormal = getCubeFaceNormal(samplePoint, cellOrigin);
 	let roughness = uCommonUniformsBuffer.roughness;
@@ -613,22 +616,24 @@ fn calculateLightingAt(samplePoint: vec3f, cellOrigin: vec3f, cellCoords: vec3u,
 	let lightSource = uCommonUniformsBuffer.lightSource;
 
 	// TODO: should dependant parameters be passed as arguments?
-	let distanceToLight:f32 = distance(lightSource.pos, samplePoint);
+	let distanceToLight:f32 = distance(incidentLightPos, samplePoint);
 	let distanceToLightFactor = max(1.0f, pow(distanceToLight, 2.0f));
-	let distanceToCamera = distance(eyePos, samplePoint);
-	let distanceToCameraFactor = max(1.0f, pow(distanceToCamera, 2.0f));
+	let distanceToEye = distance(eyePos, samplePoint);
 
-	let incidentLight = lightSource.magnitude / distanceToLightFactor;
-	let incidentLightDir = normalize(samplePoint - lightSource.pos);
+	// Limiting denominator to 1, otherwise light is going to increase with closer distance.
+	let distanceToEyeFactor = max(1.0f, pow(distanceToEye, 2.0f));
+
+	let incidentLightAttenuated = incidentLight / distanceToLightFactor;
+	let incidentLightDir = normalize(samplePoint - incidentLightPos);
 	let reflectedLightDir = reflect(incidentLightDir, surfaceNormal);
-	let reflectedLight = incidentLight * dot(reflectedLightDir, -viewDir);
-	let refractedLight = incidentLight - reflectedLight;
+	// let reflectedLight = incidentLightAttenuated * dot(reflectedLightDir, -viewDir);
+	// let refractedLight = incidentLightAttenuated - reflectedLight;
 	let brdf = surfaceBRDF(incidentLightDir, viewDir, surfaceNormal, roughness, initialMaterialColor, baseSurfaceReflectivity);
 
 	// Rendering equation.
-	let Lr = brdf * incidentLight * dot(-incidentLightDir, surfaceNormal);
-	let Lo = incidentLight - Lr;
-	let totalObservedSpectrum: vec3f = (Lr) / distanceToCameraFactor;
+	let Lr = brdf * incidentLightAttenuated * dot(-incidentLightDir, surfaceNormal);
+	let Lo = incidentLightAttenuated - Lr;
+	let totalObservedSpectrum: vec3f = (Lr) / distanceToEyeFactor;
 
 	// Second term here (incidentLight * out.xyz) simulates diffuse light.
 	// let totalObservedSpectrum = (initialMaterialColor.xyz * reflectedLight + refractedLight * initialMaterialColor.xyz) / distanceToCameraFactor;
