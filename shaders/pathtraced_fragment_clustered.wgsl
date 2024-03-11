@@ -106,41 +106,65 @@ const masks = array<u32, 32>(
 	2147483648u
 );
 
-// Offsets for neighbours lighting contribution calculations.
-const leftLayer = array<vec3i, 8>(
-	vec3i(-1, -1, -1), vec3i(-1, -1, 0), vec3i(-1, -1, 1),
-	vec3i(-1, 1, -1), vec3i(-1, 1, 0), vec3i(-1, 1, 1),
-	vec3i(-1, 0, -1), vec3i(-1, 0, 1)
+// Offsets for neighbour's lighting contribution calculations.
+// const leftLayer = array<vec3i, 9>(
+// 	vec3i(-1, -1, -1), vec3i(-1, -1, 0), vec3i(-1, -1, 1),
+// 	vec3i(-1, 1, -1), vec3i(-1, 1, 0), vec3i(-1, 1, 1),
+// 	vec3i(-1, 0, -1), vec3i(-1, 0, 1), vec3i(-1, 0, 0)
+// );
+
+const leftLayer = array<vec3i, 3>(
+	vec3i(-1, 1, 0), vec3i(-1, -1, 0), vec3i(-1, 0, 0)
 );
 
-const rightLayer = array<vec3i, 8>(
-	vec3i(1, -1, -1), vec3i(1, -1, 0), vec3i(1, -1, 1),
-	vec3i(1, 1, -1), vec3i(1, 1, 0), vec3i(1, 1, 1),
-	vec3i(1, 0, -1), vec3i(1, 0, 1)
+// const rightLayer = array<vec3i, 9>(
+// 	vec3i(1, -1, -1), vec3i(1, -1, 0), vec3i(1, -1, 1),
+// 	vec3i(1, 1, -1), vec3i(1, 1, 0), vec3i(1, 1, 1),
+// 	vec3i(1, 0, -1), vec3i(1, 0, 1), vec3i(1, 0, 0)
+// );
+
+const rightLayer = array<vec3i, 3>(
+	vec3i(1, 1, 0), vec3i(1, -1, 0), vec3i(1, 0, 0)
 );
 
-const topLayer = array<vec3i, 8>(
-	vec3i(-1, 1, 0), vec3i(1, 1, 0),
-	vec3i(-1, 1, -1), vec3i(0, 1, -1), vec3i(1, 1, -1),
-	vec3i(-1, 1, 1), vec3i(0, 1, 1), vec3i(1, 1, 1)
+// const topLayer = array<vec3i, 9>(
+// 	vec3i(-1, 1, 0), vec3i(1, 1, 0), vec3i(0, 1, 0),
+// 	vec3i(-1, 1, -1), vec3i(0, 1, -1), vec3i(1, 1, -1),
+// 	vec3i(-1, 1, 1), vec3i(0, 1, 1), vec3i(1, 1, 1)
+// );
+
+const topLayer = array<vec3i, 3>(
+	vec3i(-1, 1, 0), vec3i(1, 1, 0), vec3i(0, 1, 0)
 );
 
-const bottomLayer = array<vec3i, 8>(
-	vec3i(-1, -1, 0), vec3i(1, -1, 0),
-	vec3i(-1, -1, -1), vec3i(0, -1, -1), vec3i(1, -1, -1),
-	vec3i(-1, -1, 1), vec3i(0, -1, 1), vec3i(1, -1, 1)
+// const bottomLayer = array<vec3i, 9>(
+// 	vec3i(-1, -1, 0), vec3i(1, -1, 0), vec3i(0, -1, 0),
+// 	vec3i(-1, -1, -1), vec3i(0, -1, -1), vec3i(1, -1, -1),
+// 	vec3i(-1, -1, 1), vec3i(0, -1, 1), vec3i(1, -1, 1)
+// );
+
+const bottomLayer = array<vec3i, 3>(
+	vec3i(-1, -1, 0), vec3i(1, -1, 0), vec3i(0, -1, 0)
 );
 
-const frontLayer = array<vec3i, 8>(
-	vec3i(-1, 1, 1), vec3i(0, 1, 1), vec3i(1, 1, 1),
-	vec3i(-1, 0, 1), vec3i(1, 0, 1),
-	vec3i(-1, -1, 1), vec3i(0, -1, 1), vec3i(1, -1, 1),
+// const frontLayer = array<vec3i, 9>(
+// 	vec3i(-1, 1, 1), vec3i(0, 1, 1), vec3i(1, 1, 1),
+// 	vec3i(-1, 0, 1), vec3i(1, 0, 1), vec3i(0, 0, 1),
+// 	vec3i(-1, -1, 1), vec3i(0, -1, 1), vec3i(1, -1, 1),
+// );
+
+const frontLayer = array<vec3i, 3>(
+	vec3i(0, 1, 1), vec3i(0, 0, 1), vec3i(0, -1, 1)
 );
 
-const backLayer = array<vec3i, 8>(
-	vec3i(-1, 1, -1), vec3i(0, 1, -1), vec3i(1, 1, -1),
-	vec3i(-1, 0, -1), vec3i(1, 0, -1),
-	vec3i(-1, -1, -1), vec3i(0, -1, -1), vec3i(1, -1, -1),
+// const backLayer = array<vec3i, 9>(
+// 	vec3i(-1, 1, -1), vec3i(0, 1, -1), vec3i(1, 1, -1),
+// 	vec3i(-1, 0, -1), vec3i(1, 0, -1), vec3i(0, 0, -1),
+// 	vec3i(-1, -1, -1), vec3i(0, -1, -1), vec3i(1, -1, -1),
+// );
+
+const backLayer = array<vec3i, 3>(
+	vec3i(0, 1, -1), vec3i(0, 0, -1), vec3i(0, -1, -1)
 );
 
 //note: uniformly distributed, normalized rand, [0;1[
@@ -279,21 +303,70 @@ fn getCellFromSamplePoint(samplePoint: vec3f) -> CellData
 }
 
 // Calculates lighting contribution from neighbouring cells.
-fn calculateIndirectLighting(samplePoint: vec3f, surfaceNormal: vec3f, cellCoords: vec3u) -> vec4f
+fn calculateIndirectLighting(samplePoint: vec3f, surfaceNormal: vec3f, cellCoords: vec3u, rndOffset: f32) -> vec3f
 {
-	let indirectLighting: vec4f = vec4f(0);
-	var neighbourOffsets: array<vec3i, 8>;
-	if (surfaceNormal.x > 0)
-	{
+	var i: u32;
+	let uCellSize = uCommonUniformsBuffer.cellSize;
+	let lightSource = uCommonUniformsBuffer.lightSource;
+	let cellCoords_i32 = vec3i(cellCoords);
+	var indirectLighting = vec3f(0);
+	var neighbourOffsets: array<vec3i, 3>;
+	var neighbourCoords: vec3u;
+	var cellState: u32;
+	var neighbourCellOrigin: vec3f;
+	var neighbourDir: vec3f;
+	let cellSize = FULL_CUBE_SIZE / uGridSize;
+	let visibleCellHalfSize = cellSize * uCellSize * 0.5f;
+	var neighbourIntersection: vec2f;
+	var neighbourSamplePoint: vec3f;
 
+	if (surfaceNormal.x < 0)
+	{
+		neighbourOffsets = leftLayer;
+	}
+	else if (surfaceNormal.x > 0)
+	{
+		neighbourOffsets = rightLayer;
+	}
+	else if (surfaceNormal.y < 0)
+	{
+		neighbourOffsets = bottomLayer;
 	}
 	else if (surfaceNormal.y > 0)
 	{
-
+		neighbourOffsets = topLayer;
+	}
+	else if (surfaceNormal.z < 0)
+	{
+		neighbourOffsets = backLayer;
 	}
 	else if (surfaceNormal.z > 0)
 	{
+		neighbourOffsets = frontLayer;
+	}
 
+	for (i = 0; i < 3; i++)
+	{
+		neighbourCoords = vec3u(cellCoords_i32 + neighbourOffsets[i]);
+		cellState = getCellState(neighbourCoords);
+		if (cellState > 0)
+		{
+			neighbourCellOrigin = vec3f(neighbourCoords) * cellSize + cellSize * 0.5f - HALF_CUBE_SIZE;
+			neighbourDir = vec3f(neighbourOffsets[i]);
+			// neighbourDir = neighbourCellOrigin - samplePoint;
+			neighbourIntersection = rayCubeIntersect(samplePoint, neighbourDir, neighbourCellOrigin, visibleCellHalfSize);
+
+			if (neighbourIntersection.x <= neighbourIntersection.y && neighbourIntersection.y >= 0.0f)
+			{
+				neighbourSamplePoint = samplePoint + neighbourDir * neighbourIntersection.x;
+				let lightDir = normalize(lightSource.pos - neighbourSamplePoint);
+				let volumeIntersect = rayCubeIntersect(neighbourSamplePoint, lightDir, vec3f(0.0f), vec3f(HALF_CUBE_SIZE));
+				let volumeExit = neighbourSamplePoint + lightDir * volumeIntersect.y;
+				let occlusionFactor = rayMarchShadow(neighbourSamplePoint, volumeExit, neighbourCoords, rndOffset, uCommonUniformsBuffer.shadowSamples);
+
+				indirectLighting += calculateLightingAt(neighbourSamplePoint, neighbourCellOrigin, neighbourCoords, samplePoint) * occlusionFactor;
+			}
+		}
 	}
 
 	return indirectLighting;
@@ -301,7 +374,8 @@ fn calculateIndirectLighting(samplePoint: vec3f, surfaceNormal: vec3f, cellCoord
 
 fn calculateLightingAndOcclusionAt(samplePoint: vec3f, vUv: vec2f) -> vec4f
 {
-	var out = vec4f(0, 0, 0, 1);
+	var out = vec3f(0, 0, 0);
+	let viewMat = uCommonUniformsBuffer.viewMat;
 	var occlusionFactor = 1.0f;
 	let cellSize = FULL_CUBE_SIZE / uGridSize;
 	let cellData = getCellFromSamplePoint(samplePoint);
@@ -319,10 +393,12 @@ fn calculateLightingAndOcclusionAt(samplePoint: vec3f, vUv: vec2f) -> vec4f
 	// This also allows to see bounding volume.
 	if (cellState != 1 || distToActualCell > 0.001f)
 	{
-		return out;
+		return vec4f(out, 1.0f);
 	}
 
 	let lightDir = normalize(lightSource.pos - samplePoint);
+	let viewDir = normalize(samplePoint - viewMat[3].xyz);
+
 	let rndOffset = n1rand(vUv);
 
 	// If sample point is occluded from light source by cube itself.
@@ -341,10 +417,12 @@ fn calculateLightingAndOcclusionAt(samplePoint: vec3f, vUv: vec2f) -> vec4f
 	}
 
 	let c = vec3f(cellCoords) / uGridSize;
-	let cellColor = vec4f(c.xy, 1f - c.x, 1f);
-	out = occlusionFactor * calculateLightingAt(samplePoint, cellOrigin, cellColor);
+	let initialMaterialColor = vec3f(c.xy, 1f - c.x);
 
-	return out;
+	out = occlusionFactor * calculateLightingAt(samplePoint, cellOrigin, cellCoords, viewMat[3].xyz) + calculateIndirectLighting(samplePoint, faceNormal, cellCoords, rndOffset);
+	// out = calculateIndirectLighting(samplePoint, faceNormal, cellCoords);
+
+	return vec4f(out, 1.0f);
 }
 
 fn mixWithReprojectedColor(currentSampleColor: vec4f, prevSampleColor: vec4f, samplePos: vec3f, farthestMarchPos: vec3f, uvReprojected: vec2f, prevDepthReprojected: f32) -> vec4f
@@ -515,11 +593,13 @@ fn surfaceBRDF(lightDir: vec3f, viewDir: vec3f, surfaceNormal: vec3f, roughness:
 	return fL + fCT;
 }
 
-fn calculateLightingAt(samplePoint: vec3f, cellOrigin: vec3f, initialMaterialColor: vec4f) -> vec4f
+fn calculateLightingAt(samplePoint: vec3f, cellOrigin: vec3f, cellCoords: vec3u, eyePos: vec3f) -> vec3f
 {
-	let viewMat = uCommonUniformsBuffer.viewMat;
 	let surfaceNormal = getCubeFaceNormal(samplePoint, cellOrigin);
 	let roughness = uCommonUniformsBuffer.roughness;
+	let c = vec3f(cellCoords) / uGridSize;
+	let initialMaterialColor = vec3f(c.xy, 1f - c.x);
+	let viewDir = eyePos - samplePoint;
 
 	// Silver:
 	// let baseSurfaceReflectivity = vec3f(0.95, 0.93, 0.88);
@@ -530,15 +610,12 @@ fn calculateLightingAt(samplePoint: vec3f, cellOrigin: vec3f, initialMaterialCol
 	// Diamond:
 	// let baseSurfaceReflectivity = vec3f(0.17, 0.17, 0.17);
 	let baseSurfaceReflectivity: vec3f = uCommonUniformsBuffer.baseSurfaceReflectivity;
-
-	let cameraPos = viewMat[3].xyz;
-	let viewDir = normalize(samplePoint - cameraPos);
 	let lightSource = uCommonUniformsBuffer.lightSource;
 
 	// TODO: should dependant parameters be passed as arguments?
 	let distanceToLight:f32 = distance(lightSource.pos, samplePoint);
 	let distanceToLightFactor = max(1.0f, pow(distanceToLight, 2.0f));
-	let distanceToCamera = distance(cameraPos, samplePoint);
+	let distanceToCamera = distance(eyePos, samplePoint);
 	let distanceToCameraFactor = max(1.0f, pow(distanceToCamera, 2.0f));
 
 	let incidentLight = lightSource.magnitude / distanceToLightFactor;
@@ -546,7 +623,7 @@ fn calculateLightingAt(samplePoint: vec3f, cellOrigin: vec3f, initialMaterialCol
 	let reflectedLightDir = reflect(incidentLightDir, surfaceNormal);
 	let reflectedLight = incidentLight * dot(reflectedLightDir, -viewDir);
 	let refractedLight = incidentLight - reflectedLight;
-	let brdf = surfaceBRDF(incidentLightDir, viewDir, surfaceNormal, roughness, initialMaterialColor.xyz, baseSurfaceReflectivity);
+	let brdf = surfaceBRDF(incidentLightDir, viewDir, surfaceNormal, roughness, initialMaterialColor, baseSurfaceReflectivity);
 
 	// Rendering equation.
 	let Lr = brdf * incidentLight * dot(-incidentLightDir, surfaceNormal);
@@ -557,7 +634,7 @@ fn calculateLightingAt(samplePoint: vec3f, cellOrigin: vec3f, initialMaterialCol
 	// let totalObservedSpectrum = (initialMaterialColor.xyz * reflectedLight + refractedLight * initialMaterialColor.xyz) / distanceToCameraFactor;
 
 	// let out = vec4(out.xyz * incidentLight, out.w);
-	let out = max(vec4f(0.0), vec4f(totalObservedSpectrum, initialMaterialColor.w));
+	let out = max(vec3f(0.0), totalObservedSpectrum);
 
 	return out;
 }
