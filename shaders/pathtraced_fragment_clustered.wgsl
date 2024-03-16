@@ -422,8 +422,8 @@ fn calculateLightingAndOcclusionAt(samplePoint: vec3f, vUv: vec2f) -> vec4f
 	let c = vec3f(cellCoords) / uGridSize;
 	let initialMaterialColor = vec3f(c.xy, 1f - c.x);
 
-	out = occlusionFactor * calculateLightingAt(samplePoint, cellOrigin, cellCoords, viewMat[3].xyz, vec3f(lightSource.magnitude), lightSource.pos)
-	+ calculateIndirectLighting(samplePoint, faceNormal, cellOrigin, cellCoords, rndOffset);
+	out = occlusionFactor * calculateLightingAt(samplePoint, cellOrigin, cellCoords, viewMat[3].xyz, vec3f(lightSource.magnitude), lightSource.pos);
+	// + calculateIndirectLighting(samplePoint, faceNormal, cellOrigin, cellCoords, rndOffset);
 
 	return vec4f(out, 1.0f);
 }
