@@ -59,9 +59,6 @@ fn getClusterIdxFromGridCoordinates(cellCoords: vec3u) -> u32
 	let layerSize = u32Cols * u32(uGridSize.y);
 	let x = cellCoords.x / 32u;
 
-	// In case of power of 2 grid size having u32 cellCoorinates automatically takes care of overflow.
-	// If the value casted to u32 was -1, it becomes max u32, being power of 2 itself it perfectly cycles with modulo.
-
 	return (x % u32Cols) + (cellCoords.y % u32Rows) * u32Cols + (cellCoords.z % u32Depth) * layerSize;
 }
 
@@ -72,9 +69,6 @@ fn getClusterIdxFromInvId(invId: vec3u) -> u32
 	let u32Rows = u32(uGridSize.y);
 	let u32Depth = u32(uGridSize.z);
 	let layerSize = u32Cols * u32(uGridSize.y);
-
-	// In case of power of 2 grid size having u32 cellCoorinates automatically takes care of overflow.
-	// If the value casted to u32 was -1, it becomes max u32, being power of 2 itself it perfectly cycles with modulo.
 
 	return (invId.x % u32Cols) + (invId.y % u32Rows) * u32Cols + (invId.z % u32Depth) * layerSize;
 }
@@ -91,15 +85,23 @@ fn getCellState(cellCoords: vec3u) -> u32
 fn calcActiveNeighbours(cellCoords: vec3u) -> u32
 {
 	var i: u32 = 0;
+	let uGridSize_v3i = vec3i(uGridSize);
 	var activeNeighboursAmount: u32 = 0;
 	var neighbourhoodOffset: vec3i;
 	let cellCoords_v3i = vec3i(cellCoords);
+	var neighbourCoords: vec3i;
 	let arrSize = arrayLength(&sNeighbourhoodOffsets);
 
 	for (i = 0; i < arrSize; i += 3)
 	{
 		neighbourhoodOffset = vec3i(sNeighbourhoodOffsets[i], sNeighbourhoodOffsets[i + 1], sNeighbourhoodOffsets[i + 2]);
-		activeNeighboursAmount += getCellState(vec3u(cellCoords_v3i + neighbourhoodOffset));
+		neighbourCoords = cellCoords_v3i + neighbourhoodOffset;
+
+		// Limit calculations to the size of the grid and do not loop over the volume.
+		if (all(neighbourCoords >= vec3i(0)) && all(neighbourCoords <= uGridSize_v3i))
+		{
+			activeNeighboursAmount += getCellState(vec3u(neighbourCoords));
+		}
 	}
 
 	return activeNeighboursAmount;

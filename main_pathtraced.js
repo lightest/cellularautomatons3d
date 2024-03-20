@@ -146,7 +146,7 @@ class MainModule
 		this._lightSource =
 		{
 			// x: .5, y: 1.5, z: 1,
-			x: 0, y: 1.5, z: 0,
+			x: 0, y: 1.5, z: 1,
 			magnitude: 10,
 			_bufferIndex: MemoryManager.allocf32(4),
 
@@ -1204,7 +1204,7 @@ class MainModule
 				z: Math.floor(this._gridSize * .5) - 1
 			});
 
-			const offset = (Math.floor(this._gridSize * .5) - 1) % 32;
+			const offset = (Math.floor(this._gridSize * 0.5) - 1) % 32;
 			console.log("MID INDEX", idx);
 			cellStateData[idx] = 1 << offset;
 			// cellStateData[16] = 65535;
