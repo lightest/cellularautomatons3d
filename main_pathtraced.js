@@ -134,6 +134,15 @@ class MainModule
 		{
 			roughness: .29,
 
+			// Silver:
+			// let baseSurfaceReflectivity = vec3f(0.95, 0.93, 0.88);
+
+			// Gold:
+			// let baseSurfaceReflectivity = vec3f(1.00, 0.71, 0.29);
+
+			// Diamond:
+			// let baseSurfaceReflectivity = vec3f(0.17, 0.17, 0.17);
+
 			// Diamond base reflectivity:
 			baseReflectivity: new Float32Array(3).fill(0.17)
 		};
@@ -146,8 +155,8 @@ class MainModule
 		this._lightSource =
 		{
 			// x: .5, y: 1.5, z: 1,
-			x: 0, y: 1.5, z: 1,
-			magnitude: 10,
+			x: 0, y: 1.5, z: 0,
+			magnitude: 5,
 			_bufferIndex: MemoryManager.allocf32(4),
 
 			update()

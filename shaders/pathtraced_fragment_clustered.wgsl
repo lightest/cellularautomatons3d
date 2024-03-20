@@ -587,7 +587,8 @@ fn surfaceBRDF(lightDir: vec3f, viewDir: vec3f, surfaceNormal: vec3f, roughness:
 
 	// TODO: ensure division by zero in this case is ok.
 	// Cook-Torrance specular:
-	let fCT = (D * G * F) / ( 4.0f * dot(-viewDir, surfaceNormal) * dot(-lightDir, surfaceNormal) );
+	let denom = max(0.01, 4.0f * dot(-viewDir, surfaceNormal) * dot(-lightDir, surfaceNormal));
+	let fCT = (D * G * F) / denom;
 
 	let reflectedLightDir = reflect(lightDir, surfaceNormal);
 
@@ -602,38 +603,28 @@ fn calculateLightingAt(samplePoint: vec3f, cellOrigin: vec3f, cellCoords: vec3u,
 	let roughness = uCommonUniformsBuffer.roughness;
 	let c = vec3f(cellCoords) / uGridSize;
 	let initialMaterialColor = vec3f(c.xy, 1f - c.x);
-	let viewDir = eyePos - samplePoint;
-
-	// Silver:
-	// let baseSurfaceReflectivity = vec3f(0.95, 0.93, 0.88);
-
-	// Gold:
-	// let baseSurfaceReflectivity = vec3f(1.00, 0.71, 0.29);
-
-	// Diamond:
-	// let baseSurfaceReflectivity = vec3f(0.17, 0.17, 0.17);
+	let viewDir = normalize(eyePos - samplePoint);
 	let baseSurfaceReflectivity: vec3f = uCommonUniformsBuffer.baseSurfaceReflectivity;
-	let lightSource = uCommonUniformsBuffer.lightSource;
 
 	// TODO: should dependant parameters be passed as arguments?
-	let distanceToLight:f32 = distance(incidentLightPos, samplePoint);
-	let distanceToLightFactor = max(1.0f, pow(distanceToLight, 2.0f));
-	let distanceToEye = distance(eyePos, samplePoint);
+	// let distanceToLight:f32 = distance(incidentLightPos, samplePoint);
+	// let distanceToLightFactor = max(1.0f, pow(distanceToLight, 2.0f));
+	// let distanceToEye = distance(eyePos, samplePoint);
 
 	// Limiting denominator to 1, otherwise light is going to increase with closer distance.
-	let distanceToEyeFactor = max(1.0f, pow(distanceToEye, 2.0f));
+	// let distanceToEyeFactor = max(1.0f, pow(distanceToEye, 2.0f));
 
-	let incidentLightAttenuated = incidentLight / distanceToLightFactor;
+	// let incidentLightAttenuated = incidentLight / distanceToLightFactor;
 	let incidentLightDir = normalize(samplePoint - incidentLightPos);
-	let reflectedLightDir = reflect(incidentLightDir, surfaceNormal);
+	// let reflectedLightDir = reflect(incidentLightDir, surfaceNormal);
 	// let reflectedLight = incidentLightAttenuated * dot(reflectedLightDir, -viewDir);
 	// let refractedLight = incidentLightAttenuated - reflectedLight;
 	let brdf = surfaceBRDF(incidentLightDir, viewDir, surfaceNormal, roughness, initialMaterialColor, baseSurfaceReflectivity);
 
 	// Rendering equation.
-	let Lr = brdf * incidentLightAttenuated * dot(-incidentLightDir, surfaceNormal);
-	let Lo = incidentLightAttenuated - Lr;
-	let totalObservedSpectrum: vec3f = (Lr) / distanceToEyeFactor;
+	let Lr = brdf * incidentLight * dot(-incidentLightDir, surfaceNormal);
+	let Lo = incidentLight - Lr;
+	let totalObservedSpectrum: vec3f = (Lr);
 
 	// Second term here (incidentLight * out.xyz) simulates diffuse light.
 	// let totalObservedSpectrum = (initialMaterialColor.xyz * reflectedLight + refractedLight * initialMaterialColor.xyz) / distanceToCameraFactor;
