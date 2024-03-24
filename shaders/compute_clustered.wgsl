@@ -9,10 +9,13 @@
 // Obvuously this is bullshit, so we're passing flat array of <i32>
 // and iterate over it keeping in mind it's <vec3i> is what we packed there.
 @group(2) @binding(0) var<storage> sNeighbourhoodOffsets: array<i32>;
+@group(2) @binding(1) var<storage> sEdgesNeighbourhoodOffsets: array<i32>;
+@group(2) @binding(2) var<storage> sCornersNeighbourhoodOffsets: array<i32>;
 
 // Using array as a hash map for fast lookup and cell survival / birth checks.
-@group(2) @binding(1) var<storage> sSurviveRules: array<u32>;
-@group(2) @binding(2) var<storage> sBornRules: array<u32>;
+// Rules are packed here for both combinations of neighbourhoods direct and mixed.
+@group(2) @binding(3) var<storage> sSurviveRules: array<u32>;
+@group(2) @binding(4) var<storage> sBornRules: array<u32>;
 
 // Extracting bit wise data from u32.
 const masks = array<u32, 32>(

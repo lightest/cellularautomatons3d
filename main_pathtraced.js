@@ -58,7 +58,7 @@ const mooreNeighbourhood2D = new Int32Array(
 	]
 );
 
-const edgeNeighbourhood = new Int32Array([
+const edgesNeighbourhood = new Int32Array([
 	// Above cell.
 	1, 1, 0,  -1, 1, 0,
 	0, 1, 1,  0, 1, -1,
@@ -87,11 +87,9 @@ const NEIGHBOURHOOD_MAP = {
 	"moore 2D": mooreNeighbourhood2D,
 	"von neumann": vnNeighbourhood,
 	"von neumann 2D": vnNeighbourhood2D,
-	"edges": edgeNeighbourhood,
+	"edges": edgesNeighbourhood,
 	"corners": cornersNeighbourhood
 };
-
-console.log(NEIGHBOURHOOD_MAP["von neumann"].byteLength, NEIGHBOURHOOD_MAP["moore"].byteLength);
 
 class MainModule
 {
@@ -151,6 +149,10 @@ class MainModule
 		// 27 is to cover the last index.
 		this._surviveRulesValues = new Uint32Array(27);
 		this._bornRulesValues = new Uint32Array(27);
+		this._surviveRulesEdgesValues = new Uint32Array(27);
+		this._bornRulesEdgesValues = new Uint32Array(27);
+		this._surviveRulesCornersValues = new Uint32Array(27);
+		this._bornRulesCornersValues = new Uint32Array(27);
 
 		this._lightSource =
 		{
@@ -1249,6 +1251,7 @@ class MainModule
 		];
 
 		const neighbourhoodOffsets = NEIGHBOURHOOD_MAP[this._neighbourhood];
+
 		const neighbourhoodBuffer = this._device.createBuffer({
 			label: "neighbourhood buffer",
 			size: neighbourhoodOffsets.byteLength,
@@ -1267,18 +1270,61 @@ class MainModule
 			usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST
 		});
 
+		// Mixed neighbourhood rules mode.
+		const edgesNeighbourhoodBuffer = this._device.createBuffer({
+			label: "edges neighbourhood buffer",
+			size: edgesNeighbourhood.byteLength,
+			usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST
+		});
+
+		const cornersNeighbourhoodBuffer = this._device.createBuffer({
+			label: "corners neighbourhood buffer",
+			size: cornersNeighbourhood.byteLength,
+			usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST
+		});
+
+		const surviveRulesEdgesBuffer = this._device.createBuffer({
+			label: "survive rules buffer",
+			size: this._surviveRulesEdgesValues.byteLength,
+			usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST
+		});
+
+		const bornRulesEdgesBuffer = this._device.createBuffer({
+			label: "born rules buffer",
+			size: this._bornRulesEdgesValues.byteLength,
+			usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST
+		});
+
+		const surviveRulesCornersBuffer = this._device.createBuffer({
+			label: "survive rules buffer",
+			size: this._surviveRulesCornersValues.byteLength,
+			usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST
+		});
+
+		const bornRulesCornersBuffer = this._device.createBuffer({
+			label: "born rules buffer",
+			size: this._bornRulesCornersValues.byteLength,
+			usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST
+		});
+
 		this._device.queue.writeBuffer(cellStorageBuffers[0], 0, cellStateData);
 		this._device.queue.writeBuffer(cellStorageBuffers[1], 0, cellStateData);
 		this._device.queue.writeBuffer(neighbourhoodBuffer, 0, neighbourhoodOffsets);
 		this._device.queue.writeBuffer(surviveRulesBuffer, 0, this._surviveRulesValues);
 		this._device.queue.writeBuffer(bornRulesBuffer, 0, this._bornRulesValues);
 
+		// Mixed rules data.
+		this._device.queue.writeBuffer(edgesNeighbourhoodBuffer, 0, edgesNeighbourhood);
+		this._device.queue.writeBuffer(cornersNeighbourhoodBuffer, 0, cornersNeighbourhood);
+
 		// TODO: unify?
 		this._cellStorageBuffers = cellStorageBuffers;
 		this._storageBuffers = {
 			neighbourhoodBuffer,
+			edgesNeighbourhoodBuffer,
+			cornersNeighbourhoodBuffer,
 			surviveRulesBuffer,
-			bornRulesBuffer
+			bornRulesBuffer,
 		};
 
 		return cellStorageBuffers;
@@ -1531,7 +1577,17 @@ class MainModule
 					binding: 2,
 					visibility: GPUShaderStage.COMPUTE,
 					buffer: { type: "read-only-storage" }
-				}
+				},
+				{
+					binding: 3,
+					visibility: GPUShaderStage.COMPUTE,
+					buffer: { type: "read-only-storage" }
+				},
+				{
+					binding: 4,
+					visibility: GPUShaderStage.COMPUTE,
+					buffer: { type: "read-only-storage" }
+				},
 			]
 		});
 
@@ -1547,12 +1603,21 @@ class MainModule
 				},
 				{
 					binding: 1,
-					resource: { buffer: this._storageBuffers.surviveRulesBuffer }
+					resource: { buffer: this._storageBuffers.edgesNeighbourhoodBuffer }
 				},
 				{
 					binding: 2,
+					resource: { buffer: this._storageBuffers.cornersNeighbourhoodBuffer }
+				},
+
+				{
+					binding: 3,
+					resource: { buffer: this._storageBuffers.surviveRulesBuffer }
+				},
+				{
+					binding: 4,
 					resource: { buffer: this._storageBuffers.bornRulesBuffer }
-				}
+				},
 			]
 		});
 	}

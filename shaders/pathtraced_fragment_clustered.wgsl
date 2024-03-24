@@ -571,7 +571,7 @@ fn fresnelSchlick(halfWayVector: vec3f, viewDir: vec3f, baseSurfaceReflectivity:
 
 fn surfaceBRDF(lightDir: vec3f, viewDir: vec3f, surfaceNormal: vec3f, roughness: f32, albedo: vec3f, baseSurfaceReflectivity: vec3f) -> vec3f
 {
-	let halfWayVector: vec3f = normalize(-lightDir - viewDir);
+	let halfWayVector: vec3f = normalize(lightDir + viewDir);
 
 	// Lambertian diffuse:
 	let fL: vec3f = albedo / PI;
@@ -580,17 +580,17 @@ fn surfaceBRDF(lightDir: vec3f, viewDir: vec3f, surfaceNormal: vec3f, roughness:
 	let D: f32 = throwbridgeReitzGGX(surfaceNormal, halfWayVector, roughness);
 
 	// Geometry function:
-	let G = shlickGGX(surfaceNormal, -viewDir, roughness) * shlickGGX(surfaceNormal, -lightDir, roughness);
+	let G = shlickGGX(surfaceNormal, viewDir, roughness) * shlickGGX(surfaceNormal, lightDir, roughness);
 
 	// Fresnel equation:
-	let F = fresnelSchlick(halfWayVector, -viewDir, baseSurfaceReflectivity);
+	let F = fresnelSchlick(halfWayVector, viewDir, baseSurfaceReflectivity);
 
 	// TODO: ensure division by zero in this case is ok.
 	// Cook-Torrance specular:
-	let denom = max(0.01, 4.0f * dot(-viewDir, surfaceNormal) * dot(-lightDir, surfaceNormal));
+	let denom = 4.0f * dot(viewDir, surfaceNormal) * dot(lightDir, surfaceNormal);
 	let fCT = (D * G * F) / denom;
 
-	let reflectedLightDir = reflect(lightDir, surfaceNormal);
+	// let reflectedLightDir = reflect(lightDir, surfaceNormal);
 
 	// return clamp(dot(reflectedLightDir, -viewDir), 0.0f, 1.0f);
 
@@ -603,7 +603,8 @@ fn calculateLightingAt(samplePoint: vec3f, cellOrigin: vec3f, cellCoords: vec3u,
 	let roughness = uCommonUniformsBuffer.roughness;
 	let c = vec3f(cellCoords) / uGridSize;
 	let initialMaterialColor = vec3f(c.xy, 1f - c.x);
-	let viewDir = normalize(eyePos - samplePoint);
+	let viewDir = normalize(samplePoint - eyePos);
+	let incidentLightDir = normalize(incidentLightPos - samplePoint);
 	let baseSurfaceReflectivity: vec3f = uCommonUniformsBuffer.baseSurfaceReflectivity;
 
 	// TODO: should dependant parameters be passed as arguments?
@@ -615,15 +616,13 @@ fn calculateLightingAt(samplePoint: vec3f, cellOrigin: vec3f, cellCoords: vec3u,
 	// let distanceToEyeFactor = max(1.0f, pow(distanceToEye, 2.0f));
 
 	// let incidentLightAttenuated = incidentLight / distanceToLightFactor;
-	let incidentLightDir = normalize(samplePoint - incidentLightPos);
 	// let reflectedLightDir = reflect(incidentLightDir, surfaceNormal);
 	// let reflectedLight = incidentLightAttenuated * dot(reflectedLightDir, -viewDir);
 	// let refractedLight = incidentLightAttenuated - reflectedLight;
 	let brdf = surfaceBRDF(incidentLightDir, viewDir, surfaceNormal, roughness, initialMaterialColor, baseSurfaceReflectivity);
 
 	// Rendering equation.
-	let Lr = brdf * incidentLight * dot(-incidentLightDir, surfaceNormal);
-	let Lo = incidentLight - Lr;
+	let Lr = brdf * incidentLight * dot(incidentLightDir, surfaceNormal);
 	let totalObservedSpectrum: vec3f = (Lr);
 
 	// Second term here (incidentLight * out.xyz) simulates diffuse light.
