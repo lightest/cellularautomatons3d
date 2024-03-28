@@ -6,6 +6,7 @@ const WORK_GROUP_SIZE = 16;
 const TRANSLATION_SPEED = .15;
 const MIN_TRANSLATION_SPEED_MUL = .001;
 const MAX_TRANSLATION_SPEED_MUL = 100;
+const NEIGHBOURS_STORAGE_LEN = 27;
 
 // Von Neumann.
 const vnNeighbourhood = new Int32Array(
@@ -124,6 +125,10 @@ class MainModule
 		// this._neighbourhood = "moore 2D";
 		// this._bornRulesString = "3";
 		// this._surviveRulesString = "2,3";
+		this._bornRulesStringEdges = "1,3";
+		this._surviveRulesStringEdges = "0-6";
+		this._bornRulesStringCorners = "1,3";
+		this._surviveRulesStringCorners = "0-6";
 		this._totalStates = 2;
 		this._randomInitialState = false;
 		this._temporalAlpha = 0.1;
@@ -142,22 +147,20 @@ class MainModule
 			// let baseSurfaceReflectivity = vec3f(0.17, 0.17, 0.17);
 
 			// Diamond base reflectivity:
-			baseReflectivity: new Float32Array(3).fill(0.17)
+			baseReflectivity: new Float32Array(3).fill(0.17),
+			color: new Float32Array([0, 0, 0])
 		};
 
 		// 26 is the maximum possible amount of neighbours to consider: 9 in front of the cell, 9 in the back and 8 around.
-		// 27 is to cover the last index.
-		this._surviveRulesValues = new Uint32Array(27);
-		this._bornRulesValues = new Uint32Array(27);
-		this._surviveRulesEdgesValues = new Uint32Array(27);
-		this._bornRulesEdgesValues = new Uint32Array(27);
-		this._surviveRulesCornersValues = new Uint32Array(27);
-		this._bornRulesCornersValues = new Uint32Array(27);
+		// 27 is to cover the last index, since 0 is also included.
+		// Multiplied by 3 to cover 3 rulesets for mixed neighbourhoods mode.
+		this._surviveRulesValues = new Uint32Array(NEIGHBOURS_STORAGE_LEN * 3);
+		this._bornRulesValues = new Uint32Array(NEIGHBOURS_STORAGE_LEN * 3);
 
 		this._lightSource =
 		{
 			// x: .5, y: 1.5, z: 1,
-			x: 0, y: 1.5, z: 0,
+			x: 0.721, y: 1.5, z: 0,
 			magnitude: 5,
 			_bufferIndex: MemoryManager.allocf32(4),
 
@@ -199,7 +202,7 @@ class MainModule
 
 	async init()
 	{
-		this._recalculateRulesVlues(this._bornRulesString, this._surviveRulesString);
+		this._recalculateRulesValues();
 		this._viewMat = mat4.lookAt(
 			this._eyeVector,
 			this._target,
@@ -312,6 +315,13 @@ class MainModule
 					value: this._material.baseReflectivity
 				},
 				{
+					type: "color",
+					format: "rgb",
+					label: "material color",
+					name: "_material.color",
+					value: this._material.color
+				},
+				{
 					type: "float",
 					label: "temporal reprojection alpha",
 					name: "_temporalAlpha",
@@ -378,6 +388,38 @@ class MainModule
 					applyOnRestart: true
 				},
 				{
+					type: "text",
+					label: "born rules edges",
+					name: "_bornRulesStringEdges",
+					value: this._bornRulesStringEdges,
+					title: "e.g. 1,2-5,7",
+					applyOnRestart: true
+				},
+				{
+					type: "text",
+					label: "survive rules edges",
+					name: "_surviveRulesStringEdges",
+					value: this._surviveRulesStringEdges,
+					title: "e.g. 0-6,9",
+					applyOnRestart: true
+				},
+				{
+					type: "text",
+					label: "born rules corners",
+					name: "_bornRulesStringCorners",
+					value: this._bornRulesStringCorners,
+					title: "e.g. 1,2-5,7",
+					applyOnRestart: true
+				},
+				{
+					type: "text",
+					label: "survive rules corners",
+					name: "_surviveRulesStringCorners",
+					value: this._surviveRulesStringCorners,
+					title: "e.g. 0-6,9",
+					applyOnRestart: true
+				},
+				{
 					type: "float",
 					label: "1 / gamma",
 					name: "_gamma",
@@ -431,6 +473,7 @@ class MainModule
 		this._temporalAlphaIndex = MemoryManager.allocf32(1);
 		this._baseReflectivityIndex = MemoryManager.allocf32(3);
 		this._roughnessIndex = MemoryManager.allocf32(1);
+		this._materialColorIndex = MemoryManager.allocf32(3);
 		this._gammaIndex = MemoryManager.allocf32(1);
 		MemoryManager.writef32(this._windowSizeIndex, this._canvas.width, this._canvas.height);
 		MemoryManager.writef32(this._depthRaySamplesIndex, this._depthSamples);
@@ -438,8 +481,9 @@ class MainModule
 		MemoryManager.writef32(this._cellSizeIndex, this._cellSize);
 		MemoryManager.writef32(this._showDepthOverlayIndex, this._showDepthOverlay);
 		MemoryManager.writef32(this._temporalAlphaIndex, this._temporalAlpha);
-		MemoryManager.writef32(this._baseReflectivityIndex, this._material.baseReflectivity);
+		MemoryManager.writef32Array(this._baseReflectivityIndex, this._material.baseReflectivity);
 		MemoryManager.writef32(this._roughnessIndex, this._material.roughness);
+		MemoryManager.writef32Array(this._materialColorIndex, this._material.color);
 		MemoryManager.writef32(this._gammaIndex, this._gamma);
 	}
 
@@ -531,25 +575,44 @@ class MainModule
 		return result;
 	}
 
-	_recalculateRulesVlues(bornRulesString, surviveRulesString)
+	_recalculateRulesValues()
 	{
-		const bornValues = this._rulesComponentsToValues(bornRulesString);
-		const surviveValues = this._rulesComponentsToValues(surviveRulesString);
+		// Contains arrays of born and survival neighbours amounts.
+		// For instance "1, 3" for born rules will result in array [1, 3],
+		// "0-6" will result in [0, 1, 2, 3, 4, 5, 6] - these arrays are elements of rulesets[].
+		const rulesets = [
+			this._rulesComponentsToValues(this._bornRulesString),
+			this._rulesComponentsToValues(this._surviveRulesString),
+			this._rulesComponentsToValues(this._bornRulesStringEdges),
+			this._rulesComponentsToValues(this._surviveRulesStringEdges),
+			this._rulesComponentsToValues(this._bornRulesStringCorners),
+			this._rulesComponentsToValues(this._surviveRulesStringCorners),
+		];
 
+		let offset = 0;
 		this._bornRulesValues.fill(0);
 		this._surviveRulesValues.fill(0);
 
-		for (let i = 0; i < bornValues.length; i++)
+		for (let i = 0; i < rulesets.length; i += 2)
 		{
-			this._bornRulesValues[bornValues[i]] = 1;
+			const bornValues = rulesets[i];
+			const surviveValues = rulesets[i + 1];
+
+			for (let j = 0; j < bornValues.length; j++)
+			{
+				this._bornRulesValues[bornValues[j] + offset] = 1;
+			}
+
+			for (let j = 0; j < surviveValues.length; j++)
+			{
+				this._surviveRulesValues[surviveValues[j] + offset] = 1;
+			}
+
+			offset += NEIGHBOURS_STORAGE_LEN;
 		}
 
-		for (let i = 0; i < surviveValues.length; i++)
-		{
-			this._surviveRulesValues[surviveValues[i]] = 1;
-		}
 
-		console.log(surviveValues, bornValues, this._totalStates);
+		console.log(rulesets, this._totalStates);
 		console.log(this._surviveRulesValues, this._bornRulesValues);
 	}
 
@@ -562,7 +625,7 @@ class MainModule
 		}
 		this._simulationStep = 0;
 		this._frameDuration = 0;
-		this._recalculateRulesVlues(this._bornRulesString, this._surviveRulesString);
+		this._recalculateRulesValues();
 		this._resetStorageBuffers();
 		this._device.queue.writeBuffer(this._uniformBuffers.gridDimensionsBuffer, 0, new Float32Array([this._gridSize, this._gridSize, this._gridSize]));
 		this._ui.resetUIElementsStates();
@@ -1283,37 +1346,13 @@ class MainModule
 			usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST
 		});
 
-		const surviveRulesEdgesBuffer = this._device.createBuffer({
-			label: "survive rules buffer",
-			size: this._surviveRulesEdgesValues.byteLength,
-			usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST
-		});
-
-		const bornRulesEdgesBuffer = this._device.createBuffer({
-			label: "born rules buffer",
-			size: this._bornRulesEdgesValues.byteLength,
-			usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST
-		});
-
-		const surviveRulesCornersBuffer = this._device.createBuffer({
-			label: "survive rules buffer",
-			size: this._surviveRulesCornersValues.byteLength,
-			usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST
-		});
-
-		const bornRulesCornersBuffer = this._device.createBuffer({
-			label: "born rules buffer",
-			size: this._bornRulesCornersValues.byteLength,
-			usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST
-		});
-
 		this._device.queue.writeBuffer(cellStorageBuffers[0], 0, cellStateData);
 		this._device.queue.writeBuffer(cellStorageBuffers[1], 0, cellStateData);
 		this._device.queue.writeBuffer(neighbourhoodBuffer, 0, neighbourhoodOffsets);
 		this._device.queue.writeBuffer(surviveRulesBuffer, 0, this._surviveRulesValues);
 		this._device.queue.writeBuffer(bornRulesBuffer, 0, this._bornRulesValues);
 
-		// Mixed rules data.
+		// Additional set of neighbourhood for mixed neighbours mode.
 		this._device.queue.writeBuffer(edgesNeighbourhoodBuffer, 0, edgesNeighbourhood);
 		this._device.queue.writeBuffer(cornersNeighbourhoodBuffer, 0, cornersNeighbourhood);
 
@@ -1717,6 +1756,7 @@ class MainModule
 		MemoryManager.writef32(this._temporalAlphaIndex, this._temporalAlpha);
 		MemoryManager.writef32Array(this._baseReflectivityIndex, this._material.baseReflectivity);
 		MemoryManager.writef32(this._roughnessIndex, this._material.roughness);
+		MemoryManager.writef32Array(this._materialColorIndex, this._material.color);
 		MemoryManager.writef32(this._gammaIndex, this._gamma);
 	}
 

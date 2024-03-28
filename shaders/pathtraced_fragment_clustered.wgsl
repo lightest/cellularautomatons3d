@@ -29,6 +29,7 @@ struct CommonBufferLayout {
 	temporalAlpha: f32,
 	baseSurfaceReflectivity: vec3f,
 	roughness: f32,
+	materialColor: vec3f,
 	gamma: f32,
 };
 
@@ -419,9 +420,6 @@ fn calculateLightingAndOcclusionAt(samplePoint: vec3f, vUv: vec2f) -> vec4f
 		occlusionFactor = rayMarchShadow(samplePoint, volumeExit, cellData.cellCoords, rndOffset, uCommonUniformsBuffer.shadowSamples);
 	}
 
-	let c = vec3f(cellCoords) / uGridSize;
-	let initialMaterialColor = vec3f(c.xy, 1f - c.x);
-
 	out = occlusionFactor * calculateLightingAt(samplePoint, cellOrigin, cellCoords, viewMat[3].xyz, vec3f(lightSource.magnitude), lightSource.pos);
 	// + calculateIndirectLighting(samplePoint, faceNormal, cellOrigin, cellCoords, rndOffset);
 
@@ -602,7 +600,11 @@ fn calculateLightingAt(samplePoint: vec3f, cellOrigin: vec3f, cellCoords: vec3u,
 	let surfaceNormal = getCubeFaceNormal(samplePoint, cellOrigin);
 	let roughness = uCommonUniformsBuffer.roughness;
 	let c = vec3f(cellCoords) / uGridSize;
-	let initialMaterialColor = vec3f(c.xy, 1f - c.x);
+	var initialMaterialColor = vec3f(c.xy, 1f - c.x);
+	if (any(uCommonUniformsBuffer.materialColor != vec3f(0.0)))
+	{
+		initialMaterialColor = uCommonUniformsBuffer.materialColor;
+	}
 	let viewDir = normalize(samplePoint - eyePos);
 	let incidentLightDir = normalize(incidentLightPos - samplePoint);
 	let baseSurfaceReflectivity: vec3f = uCommonUniformsBuffer.baseSurfaceReflectivity;

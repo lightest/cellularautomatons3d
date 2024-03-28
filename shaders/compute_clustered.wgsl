@@ -14,8 +14,8 @@
 
 // Using array as a hash map for fast lookup and cell survival / birth checks.
 // Rules are packed here for both combinations of neighbourhoods direct and mixed.
-@group(2) @binding(3) var<storage> sSurviveRules: array<u32>;
-@group(2) @binding(4) var<storage> sBornRules: array<u32>;
+@group(2) @binding(3) var<storage> sSurviveRules: array<u32, 81>;
+@group(2) @binding(4) var<storage> sBornRules: array<u32, 81>;
 
 // Extracting bit wise data from u32.
 const masks = array<u32, 32>(
@@ -110,26 +110,81 @@ fn calcActiveNeighbours(cellCoords: vec3u) -> u32
 	return activeNeighboursAmount;
 }
 
-fn getNextCellState(currentCellState: u32, activeNeighboursAmount: u32) -> u32
+// Run-time sized arrays can't be passed as arguments, thus using separate functions
+// To evaluate different neighbourhoods.
+fn calcActiveNeighboursOnEdges(cellCoords: vec3u) -> u32
+{
+	var i: u32 = 0;
+	let uGridSize_v3i = vec3i(uGridSize);
+	var activeNeighboursAmount: u32 = 0;
+	var neighbourhoodOffset: vec3i;
+	let cellCoords_v3i = vec3i(cellCoords);
+	var neighbourCoords: vec3i;
+	let arrSize = arrayLength(&sEdgesNeighbourhoodOffsets);
+
+	for (i = 0; i < arrSize; i += 3)
+	{
+		neighbourhoodOffset = vec3i(sEdgesNeighbourhoodOffsets[i], sEdgesNeighbourhoodOffsets[i + 1], sEdgesNeighbourhoodOffsets[i + 2]);
+		neighbourCoords = cellCoords_v3i + neighbourhoodOffset;
+
+		// Limit calculations to the size of the grid and do not loop over the volume.
+		if (all(neighbourCoords >= vec3i(0)) && all(neighbourCoords <= uGridSize_v3i))
+		{
+			activeNeighboursAmount += getCellState(vec3u(neighbourCoords));
+		}
+	}
+
+	return activeNeighboursAmount;
+}
+
+fn calcActiveNeighboursOnCorners(cellCoords: vec3u) -> u32
+{
+	var i: u32 = 0;
+	let uGridSize_v3i = vec3i(uGridSize);
+	var activeNeighboursAmount: u32 = 0;
+	var neighbourhoodOffset: vec3i;
+	let cellCoords_v3i = vec3i(cellCoords);
+	var neighbourCoords: vec3i;
+	let arrSize = arrayLength(&sCornersNeighbourhoodOffsets);
+
+	for (i = 0; i < arrSize; i += 3)
+	{
+		neighbourhoodOffset = vec3i(sCornersNeighbourhoodOffsets[i], sCornersNeighbourhoodOffsets[i + 1], sCornersNeighbourhoodOffsets[i + 2]);
+		neighbourCoords = cellCoords_v3i + neighbourhoodOffset;
+
+		// Limit calculations to the size of the grid and do not loop over the volume.
+		if (all(neighbourCoords >= vec3i(0)) && all(neighbourCoords <= uGridSize_v3i))
+		{
+			activeNeighboursAmount += getCellState(vec3u(neighbourCoords));
+		}
+	}
+
+	return activeNeighboursAmount;
+}
+
+fn getNextCellState(currentCellState: u32, activeNeighboursAmount: u32, offset: u32, stateLUT: array<array<u32, 81>, 2>) -> u32
 {
 	var newCellState: u32 = 0;
 
 	// TODO: this should be possible to write as one-liner. Figure out how.
-	if(currentCellState == 1 && sSurviveRules[activeNeighboursAmount] > 0)
-	{
-		// Survives.
-		newCellState = 1;
-	}
-	else if (currentCellState == 0 && sBornRules[activeNeighboursAmount] > 0)
-	{
-		// Born.
-		newCellState = 1;
-	}
-	else
-	{
-		// Dead.
-		newCellState = 0;
-	}
+	// Use arrays as hashmaps again?
+	// if(currentCellState == 1 && sSurviveRules[activeNeighboursAmount + offset] > 0)
+	// {
+	// 	// Survives.
+	// 	newCellState = 1;
+	// }
+	// else if (currentCellState == 0 && sBornRules[activeNeighboursAmount + offset] > 0)
+	// {
+	// 	// Born.
+	// 	newCellState = 1;
+	// }
+	// else
+	// {
+	// 	// Dead.
+	// 	newCellState = 0;
+	// }
+
+	newCellState = stateLUT[currentCellState][activeNeighboursAmount + offset];
 
 	return newCellState;
 }
@@ -140,18 +195,41 @@ fn updateU32Cluster(invId: vec3u)
 	var i: u32;
 	var cellCoords = vec3u(0, invId.y, invId.z);
 	var currentCellState: u32;
-	var newCellState: u32;
 	var newValue: u32;
 	var neighbours: u32;
+	var edgeNeighbours: u32;
+	var cornerNeighbours: u32;
+	var newCellState: u32;
+	var rulesEvaluationResult = vec3u(0);
 	var u32Cluster = cellStateIn[clusterIdx];
 	let colOffset: u32 = invId.x * 32u;
+
+	// LUT for new cell state.
+	let stateLUT = array<array<u32, 81>, 2>(
+		sBornRules,
+		sSurviveRules
+	);
 
 	for (i = 0; i < 32; i++)
 	{
 		cellCoords.x = i + colOffset;
 		currentCellState = getCellState(cellCoords);
 		neighbours = calcActiveNeighbours(cellCoords);
-		newCellState = getNextCellState(currentCellState, neighbours);
+		edgeNeighbours = calcActiveNeighboursOnEdges(cellCoords);
+		cornerNeighbours = calcActiveNeighboursOnCorners(cellCoords);
+
+		// 27 is the neighbourhood types offset.
+		// All neighbourhoods are stored as arrays of size 27.
+		// There are three types of neighbourhoods hence 0, 27, 54.
+		rulesEvaluationResult = vec3u(
+			getNextCellState(currentCellState, neighbours, 0, stateLUT),
+			getNextCellState(currentCellState, edgeNeighbours, 27, stateLUT),
+
+			// TODO: ensure this is the best way to pass an array.
+			getNextCellState(currentCellState, cornerNeighbours, 54, stateLUT)
+		);
+
+		newCellState = u32(any(rulesEvaluationResult == vec3u(1)));
 
 		newValue = masks[i];
 
