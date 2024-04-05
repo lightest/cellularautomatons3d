@@ -127,8 +127,8 @@ class MainModule
 		// this._surviveRulesString = "2,3";
 		this._bornRulesStringEdges = "1,3";
 		this._surviveRulesStringEdges = "0-6";
-		this._bornRulesStringCorners = "1,3";
-		this._surviveRulesStringCorners = "0-6";
+		this._bornRulesStringCorners = "27";
+		this._surviveRulesStringCorners = "27";
 		this._totalStates = 2;
 		this._randomInitialState = false;
 		this._temporalAlpha = 0.1;

@@ -270,7 +270,9 @@ export class UI
 		let html =
 		`<div class="ui-container">
 			<div class="ui-body">
-				${fieldsHTML}
+				<div class="fields-container">
+					${fieldsHTML}
+				</div>
 				<div class="buttons-container">
 					${buttonsHTML}
 				</div>

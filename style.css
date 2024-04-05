@@ -40,6 +40,9 @@ canvas {
 }
 
 .ui-body {
+	position: relative;
+	display: flex;
+	flex-direction: column;
 	text-transform: uppercase;
 	background: rgb(37 37 37 / 33%);
 	border-radius: 16px;
@@ -56,6 +59,27 @@ canvas {
 	transition: transform .3s ease;
 
 	--border-radius: 11px;
+}
+
+.ui-body .fields-container {
+	padding: 0 16px 0 0;
+	overflow: auto;
+}
+
+.ui-body .buttons-container {
+	margin: 32px 0 0 0;
+}
+
+::-webkit-scrollbar {
+	width: 7px;
+	border-radius: 5px;
+	background: rgb(45 45 45 / 15%);
+	box-shadow: inset 1px 1px 1px rgb(0 0 0 / 35%), 1px 1px 1px rgb(255 255 255 / 28%);
+}
+
+::-webkit-scrollbar-thumb {
+	border-radius: 5px;
+	background: #ccc;
 }
 
 .ui-body:hover {
@@ -101,10 +125,10 @@ canvas {
 
 .ui-input input[type="color"]
 {
-    padding: 0;
-    border: none;
-    outline: none;
-    background: none;
+	padding: 0;
+	border: none;
+	outline: none;
+	background: none;
 }
 
 .ui-input select {
