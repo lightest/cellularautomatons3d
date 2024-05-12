@@ -160,7 +160,7 @@ class MainModule
 		this._lightSource =
 		{
 			// x: .5, y: 1.5, z: 1,
-			x: 0.721, y: 1.5, z: 0,
+			x: 0.721, y: 1, z: 1,
 			magnitude: 5,
 			_bufferIndex: MemoryManager.allocf32(4),
 
