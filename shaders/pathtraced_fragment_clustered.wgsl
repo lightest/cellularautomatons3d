@@ -588,10 +588,6 @@ fn surfaceBRDF(lightDir: vec3f, viewDir: vec3f, surfaceNormal: vec3f, roughness:
 	let denom = 4.0f * dot(viewDir, surfaceNormal) * dot(lightDir, surfaceNormal);
 	let fCT = (D * G * F) / denom;
 
-	// let reflectedLightDir = reflect(lightDir, surfaceNormal);
-
-	// return clamp(dot(reflectedLightDir, -viewDir), 0.0f, 1.0f);
-
 	return fL + fCT;
 }
 
@@ -605,7 +601,7 @@ fn calculateLightingAt(samplePoint: vec3f, cellOrigin: vec3f, cellCoords: vec3u,
 	{
 		initialMaterialColor = uCommonUniformsBuffer.materialColor;
 	}
-	let viewDir = normalize(samplePoint - eyePos);
+	let viewDir = normalize(eyePos - samplePoint);
 	let incidentLightDir = normalize(incidentLightPos - samplePoint);
 	let baseSurfaceReflectivity: vec3f = uCommonUniformsBuffer.baseSurfaceReflectivity;
 

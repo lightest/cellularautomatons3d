@@ -125,8 +125,8 @@ class MainModule
 		// this._neighbourhood = "moore 2D";
 		// this._bornRulesString = "3";
 		// this._surviveRulesString = "2,3";
-		this._bornRulesStringEdges = "1,3";
-		this._surviveRulesStringEdges = "0-6";
+		this._bornRulesStringEdges = "27";
+		this._surviveRulesStringEdges = "27";
 		this._bornRulesStringCorners = "27";
 		this._surviveRulesStringCorners = "27";
 		this._totalStates = 2;
