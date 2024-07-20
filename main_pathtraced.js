@@ -772,8 +772,8 @@ class MainModule
 	_handleResize()
 	{
 		const pixelRatio = window.devicePixelRatio || 1.0;
-		const width = window.innerWidth * pixelRatio | 0;
-		const height = window.innerHeight * pixelRatio | 0;
+		const width = (window.innerWidth * pixelRatio) | 0;
+		const height = (window.innerHeight * pixelRatio) | 0;
 		if (this._canvas.width !== width || this._canvas.height !== height)
 		{
 			this._canvas.width = width;
