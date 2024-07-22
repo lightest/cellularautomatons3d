@@ -227,8 +227,8 @@ class MainModule
 		const pixelRatio = window.devicePixelRatio || 1.0;
 
 		this._canvas = document.querySelector(".main-canvas");
-		this._canvas.width = (window.innerWidth * pixelRatio) | 0;
-		this._canvas.height = (window.innerHeight * pixelRatio) | 0;
+		this._canvas.width = Math.round(window.innerWidth * pixelRatio);
+		this._canvas.height = Math.round(window.innerHeight * pixelRatio);
 		this._ctx = this._canvas.getContext("webgpu");
 		this._ctx.configure({
 			device: this._device,
@@ -475,7 +475,11 @@ class MainModule
 		this._roughnessIndex = MemoryManager.allocf32(1);
 		this._materialColorIndex = MemoryManager.allocf32(3);
 		this._gammaIndex = MemoryManager.allocf32(1);
-		MemoryManager.writef32(this._windowSizeIndex, this._canvas.width, this._canvas.height);
+
+		const pixelRatio = window.devicePixelRatio || 1.0;
+		const width = Math.round(window.innerWidth * pixelRatio);
+		const height = Math.round(window.innerHeight * pixelRatio);
+		MemoryManager.writef32(this._windowSizeIndex, width, height);
 		MemoryManager.writef32(this._depthRaySamplesIndex, this._depthSamples);
 		MemoryManager.writef32(this._shadowRaySamplesIndex, this._shadowSampels);
 		MemoryManager.writef32(this._cellSizeIndex, this._cellSize);
@@ -723,13 +727,17 @@ class MainModule
 
 	_createResolutionDependentAssests()
 	{
+		const pixelRatio = window.devicePixelRatio || 1;
+		const width = Math.round(window.innerWidth * pixelRatio);
+		const height = Math.round(window.innerHeight * pixelRatio);
+
 		for (let i in this._resolutionDependentAssets)
 		{
 			this._resolutionDependentAssets[i].destroy();
 		}
 
 		const renderTarget0 = this._device.createTexture({
-			size: [this._canvas.width, this._canvas.height],
+			size: [width, height],
 			sampleCount: this._sampleCount,
 			// format: navigator.gpu.getPreferredCanvasFormat(),
 			format: "rgba16float",
@@ -737,7 +745,7 @@ class MainModule
 		});
 
 		const renderTarget1 = this._device.createTexture({
-			size: [this._canvas.width, this._canvas.height],
+			size: [width, height],
 			sampleCount: this._sampleCount,
 			// format: navigator.gpu.getPreferredCanvasFormat(),
 			format: "rgba16float",
@@ -745,14 +753,14 @@ class MainModule
 		});
 
 		const depthBuffer0 = this._device.createTexture({
-			size: [this._canvas.width, this._canvas.height],
+			size: [width, height],
 			sampleCount: this._sampleCount,
 			format: "rg16float",
 			usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING
 		});
 
 		const depthBuffer1 = this._device.createTexture({
-			size: [this._canvas.width, this._canvas.height],
+			size: [width, height],
 			sampleCount: this._sampleCount,
 			format: "rg16float",
 			usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING
@@ -772,8 +780,8 @@ class MainModule
 	_handleResize()
 	{
 		const pixelRatio = window.devicePixelRatio || 1.0;
-		const width = (window.innerWidth * pixelRatio) | 0;
-		const height = (window.innerHeight * pixelRatio) | 0;
+		const width = Math.round(window.innerWidth * pixelRatio);
+		const height = Math.round(window.innerHeight * pixelRatio);
 		if (this._canvas.width !== width || this._canvas.height !== height)
 		{
 			this._canvas.width = width;
