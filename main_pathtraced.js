@@ -3,7 +3,8 @@ import * as MemoryManager from "./MemoryManager.js";
 import { vec3, mat4, quat } from "./libs/wgpu-matrix.module.js";
 
 const WORK_GROUP_SIZE = 16;
-const TRANSLATION_SPEED = .15;
+const TRANSLATION_SPEED = 1;
+const ROTATION_SPEED = 1;
 const MIN_TRANSLATION_SPEED_MUL = .001;
 const MAX_TRANSLATION_SPEED_MUL = 100;
 const NEIGHBOURS_STORAGE_LEN = 27;
@@ -854,7 +855,7 @@ class MainModule
 		}
 	}
 
-	_applyKeyboardInput()
+	_applyKeyboardInput(dt)
 	{
 		const translationVector = new Float32Array(3);
 		const rotationAxis = new Float32Array(3);
@@ -893,47 +894,50 @@ class MainModule
 		if (this._pressedKeys["ArrowLeft"])
 		{
 			rotationAxis[1] = 1;
-			rotationMagnitude = .1;
+			rotationMagnitude = ROTATION_SPEED;
 		}
 
 		if (this._pressedKeys["ArrowRight"])
 		{
 			rotationAxis[1] = -1;
-			rotationMagnitude = .1;
+			rotationMagnitude = ROTATION_SPEED;
 		}
 
 		if (this._pressedKeys["ArrowUp"])
 		{
 			rotationAxis[0] = 1;
-			rotationMagnitude = .1;
+			rotationMagnitude = ROTATION_SPEED;
 		}
 
 		if (this._pressedKeys["ArrowDown"])
 		{
 			rotationAxis[0] = -1;
-			rotationMagnitude = .1;
+			rotationMagnitude = ROTATION_SPEED;
 		}
 
 		if (this._pressedKeys["KeyQ"])
 		{
 			rotationAxis[2] = 1;
-			rotationMagnitude = .05;
+			rotationMagnitude = ROTATION_SPEED;
 		}
 
 		if (this._pressedKeys["KeyE"])
 		{
 			rotationAxis[2] = -1;
-			rotationMagnitude = .05;
+			rotationMagnitude = ROTATION_SPEED;
 		}
 
-		translationVector[0] *= this._translationSpeedMul;
-		translationVector[1] *= this._translationSpeedMul;
-		translationVector[2] *= this._translationSpeedMul;
+		const dtSec = dt / 1000;
+
+		translationVector[0] *= this._translationSpeedMul * dtSec;
+		translationVector[1] *= this._translationSpeedMul * dtSec;
+		translationVector[2] *= this._translationSpeedMul * dtSec;
 
 		mat4.translate(this._viewMat, translationVector, this._viewMat);
 
 		if (rotationMagnitude !== 0)
 		{
+			rotationMagnitude *= dtSec;
 			mat4.rotate(this._viewMat, rotationAxis, rotationMagnitude, this._viewMat);
 		}
 	}
@@ -1820,7 +1824,7 @@ class MainModule
 		const dt = performance.now() - this._prevTime;
 		this._frameDuration += dt;
 		MemoryManager.writef32(this._elapsedTimeIndex, performance.now() * .0001);
-		this._applyKeyboardInput();
+		this._applyKeyboardInput(dt);
 		this._updateLights(dt);
 		this._updateMatrices();
 		this._updateUIValues();
