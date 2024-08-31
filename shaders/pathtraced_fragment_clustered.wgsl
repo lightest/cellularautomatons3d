@@ -69,7 +69,7 @@ const PI_OVER_180: f32 = PI / 180.0f;
 const COT_HALF_FOV: f32 = 1. / tan((37.5f) * PI_OVER_180);
 const HALF_CUBE_SIZE = 0.5f;
 const FULL_CUBE_SIZE = HALF_CUBE_SIZE * 2.0f;
-const OCCLUSION_FACTOR: f32 = 0.0f;//0.095f;
+const OCCLUSION_FACTOR: f32 = 0.0095f;
 
 // Extracting bit wise data from u32.
 const masks = array<u32, 32>(
