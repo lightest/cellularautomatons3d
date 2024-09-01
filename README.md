@@ -1,7 +1,12 @@
 # 3D Cellular Automatons
 
-WORK IN PROGRESS! Expect UI!
+- WebGPU based cellular automatons (no deps).
+- State is packed entirely in uint32.
+- Physically based lighting.
+- Path-traced volume which allows for rendering large amounts of cells real-time.
+- Computed real-time using compute shaders.
 
-![image](https://github.com/lightest/cellularautomatons3d/assets/2725889/897312c7-fb9f-4dd8-9bef-8b5b893427e0)
+![image](https://github.com/user-attachments/assets/b20b975c-153a-4a5f-a37e-c80e4ff4e409)
+
 
 
